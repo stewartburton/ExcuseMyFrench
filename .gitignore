@@ -1,0 +1,41 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*.so
+
+# Virtual environments
+.env
+.venv/
+env/
+venv/
+
+# Model files and checkpoints
+models/
+*.safetensors
+*.ckpt
+
+# Data and generated media
+data/
+*.png
+*.jpg
+*.jpeg
+*.gif
+*.mp3
+*.wav
+*.mp4
+*.mov
+
+# Logs and databases
+*.log
+*.db
+
+# OS-specific files
+.DS_Store
+Thumbs.db
+
+# IDE/editor settings
+.vscode/
+.idea/
+
+# n8n environment
+.n8n/
