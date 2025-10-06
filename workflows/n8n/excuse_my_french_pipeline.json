@@ -1,0 +1,356 @@
+{
+  "name": "Excuse My French - Full Pipeline",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "hours",
+              "hoursInterval": 24
+            }
+          ]
+        }
+      },
+      "name": "Schedule Trigger",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1,
+      "position": [250, 300],
+      "id": "trigger-schedule"
+    },
+    {
+      "parameters": {
+        "command": "cd D:\\ExcuseMyFrench\\Repo\\ExcuseMyFrench && excusemyfrench\\Scripts\\activate && python scripts/fetch_trends.py"
+      },
+      "name": "1. Fetch Trends",
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [450, 300],
+      "id": "step-fetch-trends"
+    },
+    {
+      "parameters": {
+        "command": "cd D:\\ExcuseMyFrench\\Repo\\ExcuseMyFrench && excusemyfrench\\Scripts\\activate && python scripts/generate_script.py"
+      },
+      "name": "2. Generate Script",
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [650, 300],
+      "id": "step-generate-script",
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "operation": "parseJson",
+        "jsonString": "={{ $json.stdout }}"
+      },
+      "name": "Parse Script Output",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 1,
+      "position": [850, 300],
+      "id": "parse-script-output"
+    },
+    {
+      "parameters": {
+        "command": "cd D:\\ExcuseMyFrench\\Repo\\ExcuseMyFrench && excusemyfrench\\Scripts\\activate && python scripts/generate_audio.py {{ $json.script_file }}"
+      },
+      "name": "3. Generate Audio",
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [1050, 300],
+      "id": "step-generate-audio"
+    },
+    {
+      "parameters": {
+        "command": "cd D:\\ExcuseMyFrench\\Repo\\ExcuseMyFrench && excusemyfrench\\Scripts\\activate && python scripts/select_images.py {{ $json.script_file }} --output {{ $json.episode_name }}_selections.json"
+      },
+      "name": "4. Select Images",
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [1250, 300],
+      "id": "step-select-images"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{ $json.missing_images }}",
+              "value2": "0",
+              "operation": "notEqual"
+            }
+          ]
+        }
+      },
+      "name": "Check Missing Images",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [1450, 300],
+      "id": "check-missing-images"
+    },
+    {
+      "parameters": {
+        "command": "cd D:\\ExcuseMyFrench\\Repo\\ExcuseMyFrench && excusemyfrench\\Scripts\\activate && python scripts/generate_images.py --missing-json {{ $json.episode_name }}_selections.json"
+      },
+      "name": "5a. Generate Missing Images",
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [1650, 200],
+      "id": "step-generate-images"
+    },
+    {
+      "parameters": {
+        "command": "cd D:\\ExcuseMyFrench\\Repo\\ExcuseMyFrench && excusemyfrench\\Scripts\\activate && python scripts/select_images.py {{ $json.script_file }} --output {{ $json.episode_name }}_selections.json"
+      },
+      "name": "5b. Re-select Images",
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [1850, 200],
+      "id": "step-reselect-images"
+    },
+    {
+      "parameters": {},
+      "name": "Merge",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 1,
+      "position": [2050, 300],
+      "id": "merge-paths"
+    },
+    {
+      "parameters": {
+        "command": "cd D:\\ExcuseMyFrench\\Repo\\ExcuseMyFrench && excusemyfrench\\Scripts\\activate && python scripts/animate.py --timeline data/audio/{{ $json.episode_name }}/timeline.json --images {{ $json.episode_name }}_selections.json"
+      },
+      "name": "6. Animate",
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [2250, 300],
+      "id": "step-animate"
+    },
+    {
+      "parameters": {
+        "command": "cd D:\\ExcuseMyFrench\\Repo\\ExcuseMyFrench && excusemyfrench\\Scripts\\activate && python scripts/assemble_video.py --timeline data/audio/{{ $json.episode_name }}/timeline.json --images data/animated/{{ $json.episode_name }}/animations.json --music data/music/background.mp3"
+      },
+      "name": "7. Assemble Video",
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [2450, 300],
+      "id": "step-assemble-video"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{ $env.SKIP_POSTING }}",
+              "value2": "false"
+            }
+          ]
+        }
+      },
+      "name": "Check Auto Post",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [2650, 300],
+      "id": "check-auto-post"
+    },
+    {
+      "parameters": {
+        "command": "cd D:\\ExcuseMyFrench\\Repo\\ExcuseMyFrench && excusemyfrench\\Scripts\\activate && python scripts/post_instagram.py data/final_videos/{{ $json.episode_name }}.mp4"
+      },
+      "name": "8. Post to Instagram",
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [2850, 200],
+      "id": "step-post-instagram"
+    },
+    {
+      "parameters": {
+        "message": "✅ Video Generated: {{ $json.episode_name }}.mp4\n\nManual posting required.",
+        "additionalFields": {}
+      },
+      "name": "Notify Manual Post",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [2850, 400],
+      "id": "notify-manual"
+    },
+    {
+      "parameters": {
+        "message": "❌ Pipeline Error: {{ $json.error }}",
+        "additionalFields": {}
+      },
+      "name": "Error Handler",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [1450, 500],
+      "id": "error-handler"
+    }
+  ],
+  "connections": {
+    "Schedule Trigger": {
+      "main": [
+        [
+          {
+            "node": "1. Fetch Trends",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "1. Fetch Trends": {
+      "main": [
+        [
+          {
+            "node": "2. Generate Script",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "2. Generate Script": {
+      "main": [
+        [
+          {
+            "node": "Parse Script Output",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Script Output": {
+      "main": [
+        [
+          {
+            "node": "3. Generate Audio",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "3. Generate Audio": {
+      "main": [
+        [
+          {
+            "node": "4. Select Images",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "4. Select Images": {
+      "main": [
+        [
+          {
+            "node": "Check Missing Images",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Missing Images": {
+      "main": [
+        [
+          {
+            "node": "5a. Generate Missing Images",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "5a. Generate Missing Images": {
+      "main": [
+        [
+          {
+            "node": "5b. Re-select Images",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "5b. Re-select Images": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge": {
+      "main": [
+        [
+          {
+            "node": "6. Animate",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "6. Animate": {
+      "main": [
+        [
+          {
+            "node": "7. Assemble Video",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "7. Assemble Video": {
+      "main": [
+        [
+          {
+            "node": "Check Auto Post",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Auto Post": {
+      "main": [
+        [
+          {
+            "node": "8. Post to Instagram",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Notify Manual Post",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": [],
+  "triggerCount": 1,
+  "updatedAt": "2025-01-06T00:00:00.000Z",
+  "versionId": "1"
+}
