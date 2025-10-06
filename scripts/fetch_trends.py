@@ -45,29 +45,13 @@ class TrendsFetcher:
         self._init_database()
 
     def _init_database(self):
-        """Initialize the database schema if it doesn't exist."""
-        with sqlite3.connect(self.db_path) as conn:
-            cursor = conn.cursor()
-            cursor.execute("""
-                CREATE TABLE IF NOT EXISTS trends (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    keyword TEXT NOT NULL,
-                    region TEXT NOT NULL,
-                    interest INTEGER,
-                    category TEXT,
-                    timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
-                    fetched_date DATE,
-                    UNIQUE(keyword, region, fetched_date)
-                )
-            """)
-            cursor.execute("""
-                CREATE INDEX IF NOT EXISTS idx_keyword ON trends(keyword)
-            """)
-            cursor.execute("""
-                CREATE INDEX IF NOT EXISTS idx_timestamp ON trends(timestamp DESC)
-            """)
-            conn.commit()
-            logger.info(f"Database initialized at {self.db_path}")
+        """Verify the database exists (schema should be created by init_databases.py)."""
+        if not self.db_path.exists():
+            logger.warning(
+                f"Database not found at {self.db_path}. "
+                "Run init_databases.py first to create the schema."
+            )
+        logger.info(f"Using database at {self.db_path}")
 
     def fetch_trending_searches(self, region: str = "united_states") -> List[str]:
         """
@@ -172,8 +156,6 @@ class TrendsFetcher:
             logger.warning("No trends to store")
             return
 
-        today = datetime.now().date()
-
         with sqlite3.connect(self.db_path) as conn:
             cursor = conn.cursor()
             stored_count = 0
@@ -181,10 +163,10 @@ class TrendsFetcher:
             for keyword in trends:
                 try:
                     cursor.execute("""
-                        INSERT OR IGNORE INTO trends
-                        (keyword, region, interest, category, fetched_date)
-                        VALUES (?, ?, ?, ?, ?)
-                    """, (keyword, region, 100, category, today))
+                        INSERT OR IGNORE INTO trending_topics
+                        (topic, source, relevance_score, category)
+                        VALUES (?, ?, ?, ?)
+                    """, (keyword, f"google_trends_{region}", 1.0, category))
 
                     if cursor.rowcount > 0:
                         stored_count += 1
@@ -211,22 +193,20 @@ class TrendsFetcher:
             logger.warning("No interest data to store")
             return
 
-        today = datetime.now().date()
-
         with sqlite3.connect(self.db_path) as conn:
             cursor = conn.cursor()
             stored_count = 0
 
             for keyword in interest_df.columns:
-                # Get the average interest for this keyword
-                avg_interest = int(interest_df[keyword].mean())
+                # Get the average interest for this keyword, normalized to 0-1 scale
+                avg_interest = float(interest_df[keyword].mean() / 100.0)
 
                 try:
                     cursor.execute("""
-                        INSERT OR REPLACE INTO trends
-                        (keyword, region, interest, category, fetched_date)
-                        VALUES (?, ?, ?, ?, ?)
-                    """, (keyword, region, avg_interest, "interest_over_time", today))
+                        INSERT OR REPLACE INTO trending_topics
+                        (topic, source, relevance_score, category)
+                        VALUES (?, ?, ?, ?)
+                    """, (keyword, f"google_trends_{region}", avg_interest, "interest_over_time"))
                     stored_count += 1
 
                 except sqlite3.Error as e:
@@ -251,10 +231,10 @@ class TrendsFetcher:
         with sqlite3.connect(self.db_path) as conn:
             cursor = conn.cursor()
             cursor.execute("""
-                SELECT keyword, region, interest, category, timestamp
-                FROM trends
+                SELECT topic, source, relevance_score, category, timestamp
+                FROM trending_topics
                 WHERE timestamp >= ?
-                ORDER BY interest DESC, timestamp DESC
+                ORDER BY relevance_score DESC, timestamp DESC
                 LIMIT ?
             """, (cutoff_date, limit))
 
@@ -262,8 +242,8 @@ class TrendsFetcher:
             trends = [
                 {
                     'keyword': row[0],
-                    'region': row[1],
-                    'interest': row[2],
+                    'source': row[1],
+                    'relevance_score': row[2],
                     'category': row[3],
                     'timestamp': row[4]
                 }
@@ -361,9 +341,10 @@ Examples:
             print(f"\nRecent trends (last {args.days} days):")
             print("-" * 80)
             for i, trend in enumerate(trends, 1):
+                relevance_pct = int(trend['relevance_score'] * 100)
                 print(f"{i:2d}. {trend['keyword']:40s} "
-                      f"Interest: {trend['interest']:3d} "
-                      f"Region: {trend['region']:15s} "
+                      f"Relevance: {relevance_pct:3d}% "
+                      f"Source: {trend['source']:20s} "
                       f"({trend['timestamp']})")
         else:
             print("No recent trends found in database")

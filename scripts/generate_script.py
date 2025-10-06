@@ -235,6 +235,17 @@ Generate the script now:"""
         if not trending_topics:
             raise ValueError("No trending topics provided")
 
+        # Validate trending topics
+        if not isinstance(trending_topics, list):
+            raise TypeError("trending_topics must be a list")
+
+        if not all(isinstance(topic, str) and topic.strip() for topic in trending_topics):
+            raise ValueError("All trending topics must be non-empty strings")
+
+        if len(trending_topics) > 10:
+            logger.warning(f"Too many topics ({len(trending_topics)}), using first 10")
+            trending_topics = trending_topics[:10]
+
         prompt = self._build_prompt(trending_topics, topic_context)
 
         # Generate with appropriate provider
@@ -335,16 +346,16 @@ def get_trending_topics(db_path: str, days: int = 7, limit: int = 5) -> List[str
 
     if not db_file.exists():
         logger.error(f"Trends database not found at {db_path}")
-        logger.info("Run fetch_trends.py first to populate the database")
+        logger.info("Run init_databases.py and fetch_trends.py first to populate the database")
         return []
 
     with sqlite3.connect(db_path) as conn:
         cursor = conn.cursor()
         cursor.execute("""
-            SELECT keyword, interest
-            FROM trends
+            SELECT topic, relevance_score
+            FROM trending_topics
             WHERE DATE(timestamp) >= DATE('now', '-' || ? || ' days')
-            ORDER BY interest DESC, timestamp DESC
+            ORDER BY relevance_score DESC, timestamp DESC
             LIMIT ?
         """, (days, limit))
 

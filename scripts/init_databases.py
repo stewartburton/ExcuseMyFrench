@@ -19,9 +19,17 @@ import sqlite3
 import os
 import sys
 import argparse
+import logging
 from pathlib import Path
 from datetime import datetime
 from typing import Optional
+
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+)
+logger = logging.getLogger(__name__)
 
 # Fix Windows console encoding
 if sys.platform == 'win32':
@@ -420,7 +428,13 @@ def init_database(db_path: Path, db_name: str, schema_func, seed_func=None, rese
             )
             tables = cursor.fetchall()
             for table in tables:
-                db.conn.execute(f"DROP TABLE IF EXISTS {table[0]}")
+                table_name = table[0]
+                # Validate table name to prevent SQL injection
+                if not table_name.replace('_', '').isalnum():
+                    logger.warning(f"Skipping table with invalid name: {table_name}")
+                    continue
+                # Use parameterized query (not supported for table names, so validate instead)
+                db.conn.execute(f"DROP TABLE IF EXISTS [{table_name}]")
             db.conn.commit()
             print("  ✓ All tables dropped")
 
