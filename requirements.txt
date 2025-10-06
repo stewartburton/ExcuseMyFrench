@@ -1,9 +1,28 @@
+# Core dependencies
 openai>=1.0
+anthropic>=0.34.0
+python-dotenv>=1.0
+
+# Trends and data processing
 pytrends>=4.9
 pandas>=2.0
-ffmpeg-python>=0.2
+
+# Audio generation and processing
 elevenlabs>=0.2.26
-python-dotenv>=1.0
+soundfile>=0.12
+
+# Video processing
+ffmpeg-python>=0.2
+
+# Image generation
 diffusers>=0.23
 torch>=2.0
-soundfile>=0.12
+transformers>=4.30
+accelerate>=0.20
+safetensors>=0.3
+
+# Image processing
+Pillow>=10.0
+
+# Database
+# SQLite is built into Python, no additional package needed

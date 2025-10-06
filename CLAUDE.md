@@ -1,0 +1,1 @@
+- remember the custom voices for both characters

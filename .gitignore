@@ -8,6 +8,7 @@ __pycache__/
 .venv/
 env/
 venv/
+excusemyfrench/
 
 # Model files and checkpoints
 models/
@@ -36,6 +37,7 @@ Thumbs.db
 # IDE/editor settings
 .vscode/
 .idea/
+.claude/
 
 # n8n environment
 .n8n/
