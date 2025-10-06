@@ -24,5 +24,13 @@ safetensors>=0.3
 # Image processing
 Pillow>=10.0
 
+# Video animation and lip-sync
+opencv-python>=4.8
+numpy>=1.24
+scipy>=1.10
+librosa>=0.10
+# Note: SadTalker and Wav2Lip require separate installation
+# See docs/ANIMATION_SETUP.md for instructions
+
 # Database
 # SQLite is built into Python, no additional package needed

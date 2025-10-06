@@ -7,7 +7,8 @@ This directory contains the core pipeline scripts for generating Excuse My Frenc
 3. **generate_audio.py** - Generate voice audio using ElevenLabs
 4. **select_images.py** - Select character images from library
 5. **generate_images.py** - Generate missing images with Stable Diffusion
-6. **assemble_video.py** - Assemble final video with ffmpeg
+6. **animate.py** - Generate lip-synced animations with SadTalker/Wav2Lip
+7. **assemble_video.py** - Assemble final video with ffmpeg
 
 ## Prerequisites
 
@@ -42,10 +43,10 @@ cp config/.env.example config/.env
 ## Pipeline Overview
 
 ```
-Trending Topics → Script → Audio → Images → Video
-     ↓              ↓        ↓        ↓        ↓
-fetch_trends → generate_ → generate_ → select_ → assemble_
-               script      audio      images    video
+Trending Topics → Script → Audio → Images → Animation → Video
+     ↓              ↓        ↓        ↓          ↓         ↓
+fetch_trends → generate_ → generate_ → select_ → animate → assemble_
+               script      audio      images              video
                                         ↓
                                    generate_
                                    images
@@ -203,7 +204,51 @@ python scripts/generate_images.py --character Butcher --emotion happy --steps 75
 - Requires significant GPU memory (8GB+ VRAM recommended)
 - Generation takes 30-60 seconds per image on GPU
 
-### 6. assemble_video.py
+### 6. animate.py
+
+Generate lip-synced animated videos using SadTalker or Wav2Lip.
+
+**Basic usage:**
+```bash
+# Animate entire episode from timeline and images
+python scripts/animate.py \
+  --timeline data/audio/20240101_120000/timeline.json \
+  --images data/image_selections.json
+
+# Use specific animation method
+python scripts/animate.py \
+  --timeline timeline.json \
+  --images selections.json \
+  --method wav2lip
+
+# Animate single image/audio pair
+python scripts/animate.py \
+  --image data/butcher/butcher_neutral.png \
+  --audio data/audio/episode/001_butcher_sarcastic.mp3 \
+  --output data/animated/test.mp4
+
+# Use CPU instead of GPU
+python scripts/animate.py \
+  --timeline timeline.json \
+  --images selections.json \
+  --cpu
+```
+
+**Output:**
+- Creates `data/animated/EPISODE_NAME/` directory with animated clips
+- Each clip is a lip-synced video matching the audio
+- Creates `animations.json` manifest with metadata
+
+**Methods:**
+- **SadTalker** (recommended): Realistic talking heads with natural head movements
+- **Wav2Lip**: Lightweight lip-sync only
+
+**Setup Required:**
+- See `docs/ANIMATION_SETUP.md` for installation instructions
+- SadTalker: ~4GB models, requires 6GB+ VRAM
+- Wav2Lip: ~300MB models, requires 4GB+ VRAM
+
+### 7. assemble_video.py
 
 Assemble final video with audio, images, and optional music/subtitles.
 
