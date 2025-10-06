@@ -90,6 +90,7 @@ class VideoAssembler:
             clip_list: List of paths to video clips
             output_path: Path to save concatenated video
         """
+        concat_file = None
         try:
             logger.info(f"Concatenating {len(clip_list)} clips...")
 
@@ -106,14 +107,15 @@ class VideoAssembler:
 
             ffmpeg.run(stream, capture_stdout=True, capture_stderr=True, quiet=True)
 
-            # Clean up concat file
-            concat_file.unlink()
-
             logger.info(f"Clips concatenated: {output_path}")
 
         except ffmpeg.Error as e:
             logger.error(f"FFmpeg error concatenating clips: {e.stderr.decode()}")
             raise
+        finally:
+            # Clean up concat file
+            if concat_file and concat_file.exists():
+                concat_file.unlink()
 
     def add_audio(
         self,
@@ -131,6 +133,8 @@ class VideoAssembler:
             timeline: Timeline dictionary with timing information
             output_path: Path to save output video
         """
+        audio_concat_file = None
+        temp_audio = None
         try:
             logger.info("Adding audio track...")
 
@@ -162,15 +166,17 @@ class VideoAssembler:
             stream = ffmpeg.overwrite_output(stream)
             ffmpeg.run(stream, capture_stdout=True, capture_stderr=True, quiet=True)
 
-            # Clean up temp files
-            audio_concat_file.unlink()
-            temp_audio.unlink()
-
             logger.info(f"Audio added: {output_path}")
 
         except ffmpeg.Error as e:
             logger.error(f"FFmpeg error adding audio: {e.stderr.decode()}")
             raise
+        finally:
+            # Clean up temp files
+            if audio_concat_file and audio_concat_file.exists():
+                audio_concat_file.unlink()
+            if temp_audio and temp_audio.exists():
+                temp_audio.unlink()
 
     def add_background_music(
         self,

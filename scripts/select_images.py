@@ -47,39 +47,13 @@ class ImageSelector:
         self._init_database()
 
     def _init_database(self):
-        """Initialize the database schema if it doesn't exist."""
-        with sqlite3.connect(self.db_path) as conn:
-            cursor = conn.cursor()
-
-            # Create images table
-            cursor.execute("""
-                CREATE TABLE IF NOT EXISTS images (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    character TEXT NOT NULL,
-                    emotion TEXT NOT NULL,
-                    file_path TEXT NOT NULL UNIQUE,
-                    source TEXT,
-                    quality_score REAL DEFAULT 1.0,
-                    use_count INTEGER DEFAULT 0,
-                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-                    last_used_at DATETIME,
-                    metadata TEXT
-                )
-            """)
-
-            # Create indexes
-            cursor.execute("""
-                CREATE INDEX IF NOT EXISTS idx_character_emotion
-                ON images(character, emotion)
-            """)
-
-            cursor.execute("""
-                CREATE INDEX IF NOT EXISTS idx_quality
-                ON images(quality_score DESC)
-            """)
-
-            conn.commit()
-            logger.info(f"Database initialized at {self.db_path}")
+        """Verify the database exists (schema should be created by init_databases.py)."""
+        if not self.db_path.exists():
+            logger.warning(
+                f"Database not found at {self.db_path}. "
+                "Run init_databases.py first to create the schema."
+            )
+        logger.info(f"Using database at {self.db_path}")
 
     def add_image(
         self,
@@ -115,7 +89,7 @@ class ImageSelector:
             with sqlite3.connect(self.db_path) as conn:
                 cursor = conn.cursor()
                 cursor.execute("""
-                    INSERT INTO images
+                    INSERT INTO image_library
                     (character, emotion, file_path, source, quality_score, metadata)
                     VALUES (?, ?, ?, ?, ?, ?)
                 """, (character, emotion, file_path, source, quality_score, metadata_json))
@@ -192,9 +166,9 @@ class ImageSelector:
             # Select least-used, highest-quality image
             cursor.execute("""
                 SELECT file_path
-                FROM images
+                FROM image_library
                 WHERE character = ? AND emotion = ?
-                ORDER BY use_count ASC, quality_score DESC, RANDOM()
+                ORDER BY usage_count ASC, quality_score DESC, RANDOM()
                 LIMIT 1
             """, (character, emotion))
 
@@ -208,7 +182,7 @@ class ImageSelector:
                 else:
                     logger.warning(f"Image file missing: {file_path}")
                     # Remove from database
-                    cursor.execute("DELETE FROM images WHERE file_path = ?", (file_path,))
+                    cursor.execute("DELETE FROM image_library WHERE file_path = ?", (file_path,))
                     conn.commit()
                     return None
             else:
@@ -219,8 +193,8 @@ class ImageSelector:
         with sqlite3.connect(self.db_path) as conn:
             cursor = conn.cursor()
             cursor.execute("""
-                UPDATE images
-                SET use_count = use_count + 1,
+                UPDATE image_library
+                SET usage_count = usage_count + 1,
                     last_used_at = CURRENT_TIMESTAMP
                 WHERE file_path = ?
             """, (file_path,))
@@ -350,13 +324,13 @@ class ImageSelector:
             cursor = conn.cursor()
 
             # Total images
-            cursor.execute("SELECT COUNT(*) FROM images")
+            cursor.execute("SELECT COUNT(*) FROM image_library")
             total = cursor.fetchone()[0]
 
             # Images by character
             cursor.execute("""
                 SELECT character, COUNT(*) as count
-                FROM images
+                FROM image_library
                 GROUP BY character
             """)
             by_character = dict(cursor.fetchall())
@@ -364,7 +338,7 @@ class ImageSelector:
             # Images by emotion
             cursor.execute("""
                 SELECT emotion, COUNT(*) as count
-                FROM images
+                FROM image_library
                 GROUP BY emotion
                 ORDER BY count DESC
             """)
@@ -373,7 +347,7 @@ class ImageSelector:
             # Coverage matrix
             cursor.execute("""
                 SELECT character, emotion, COUNT(*) as count
-                FROM images
+                FROM image_library
                 GROUP BY character, emotion
                 ORDER BY character, emotion
             """)
