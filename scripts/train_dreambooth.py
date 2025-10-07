@@ -53,6 +53,11 @@ from dotenv import load_dotenv
 env_path = Path(__file__).parent.parent / "config" / ".env"
 load_dotenv(env_path)
 
+# Set HF token for authentication
+hf_token = os.getenv("HF_TOKEN")
+if hf_token:
+    os.environ["HF_TOKEN"] = hf_token
+
 # Configure logging
 logging.basicConfig(
     level=logging.INFO,
@@ -291,11 +296,15 @@ class DreamBoothTrainer:
         """Load pretrained models."""
         logger.info(f"Loading models from {self.config.base_model}")
 
+        # Get HF token
+        token = os.getenv("HF_TOKEN")
+
         # Load tokenizer
         self.tokenizer = CLIPTokenizer.from_pretrained(
             self.config.base_model,
             subfolder="tokenizer",
             revision=self.config.revision,
+            token=token,
         )
 
         # Load text encoder
@@ -303,6 +312,7 @@ class DreamBoothTrainer:
             self.config.base_model,
             subfolder="text_encoder",
             revision=self.config.revision,
+            token=token,
         )
 
         # Load VAE
@@ -310,6 +320,7 @@ class DreamBoothTrainer:
             self.config.base_model,
             subfolder="vae",
             revision=self.config.revision,
+            token=token,
         )
 
         # Load UNet
@@ -317,12 +328,14 @@ class DreamBoothTrainer:
             self.config.base_model,
             subfolder="unet",
             revision=self.config.revision,
+            token=token,
         )
 
         # Load noise scheduler
         self.noise_scheduler = DDPMScheduler.from_pretrained(
             self.config.base_model,
             subfolder="scheduler",
+            token=token,
         )
 
         # Freeze VAE
@@ -359,11 +372,15 @@ class DreamBoothTrainer:
         num_to_generate = self.config.num_class_images - num_existing
         logger.info(f"Generating {num_to_generate} class images...")
 
+        # Get HF token
+        token = os.getenv("HF_TOKEN")
+
         # Load pipeline for generation
         pipeline = StableDiffusionPipeline.from_pretrained(
             self.config.base_model,
             revision=self.config.revision,
             torch_dtype=torch.float16 if self.accelerator.mixed_precision == "fp16" else torch.float32,
+            token=token,
         )
         pipeline.set_progress_bar_config(disable=True)
         pipeline.to(self.accelerator.device)
