@@ -1,0 +1,13 @@
+# Image Captions for Butcher Training Data
+#
+# Format: filename<TAB>caption
+#
+# This file will be automatically generated when you run:
+# python scripts/prepare_training_data.py --input photos --output training/butcher/images
+#
+# Example entries:
+# butcher_0001.png	a photo of sks dog, french bulldog
+# butcher_0002.png	a photo of sks dog, french bulldog, happy expression
+# butcher_0003.png	a photo of sks dog, french bulldog, sitting
+#
+# You can manually edit captions to add more specific descriptions

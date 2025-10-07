@@ -55,6 +55,39 @@ class ImageSelector:
             )
         logger.info(f"Using database at {self.db_path}")
 
+    def _validate_image_path(self, file_path: str) -> bool:
+        """
+        Validate that an image path is within the allowed data directory.
+
+        Args:
+            file_path: Path to validate
+
+        Returns:
+            True if path is valid, False otherwise
+        """
+        try:
+            # Get the base data directory (resolve to absolute path)
+            base_dir = Path("data").resolve()
+
+            # Resolve the file path to its canonical absolute path
+            resolved_path = Path(file_path).resolve()
+
+            # Check if the resolved path is within the base directory
+            # is_relative_to() checks if this path starts with the base_dir path
+            if hasattr(resolved_path, 'is_relative_to'):
+                # Python 3.9+
+                return resolved_path.is_relative_to(base_dir)
+            else:
+                # Python 3.8 fallback
+                try:
+                    resolved_path.relative_to(base_dir)
+                    return True
+                except ValueError:
+                    return False
+        except Exception as e:
+            logger.error(f"Error validating path {file_path}: {e}")
+            return False
+
     def add_image(
         self,
         character: str,
@@ -78,6 +111,11 @@ class ImageSelector:
         Returns:
             True if added successfully, False otherwise
         """
+        # Validate path to prevent traversal attacks
+        if not self._validate_image_path(file_path):
+            logger.error(f"Invalid image path (must be within data/ directory): {file_path}")
+            return False
+
         # Verify file exists
         if not Path(file_path).exists():
             logger.error(f"Image file not found: {file_path}")
@@ -175,8 +213,17 @@ class ImageSelector:
             row = cursor.fetchone()
 
             if row:
-                # Verify file still exists
+                # Verify file still exists and is within valid directory
                 file_path = row[0]
+
+                # Validate path to prevent traversal attacks
+                if not self._validate_image_path(file_path):
+                    logger.error(f"Invalid image path in database (not within data/ directory): {file_path}")
+                    # Remove from database for security
+                    cursor.execute("DELETE FROM image_library WHERE file_path = ?", (file_path,))
+                    conn.commit()
+                    return None
+
                 if Path(file_path).exists():
                     return file_path
                 else:
@@ -200,10 +247,66 @@ class ImageSelector:
             """, (file_path,))
             conn.commit()
 
+    def _batch_query_images(
+        self,
+        requests: List[Tuple[str, str]]
+    ) -> Dict[Tuple[str, str], Optional[str]]:
+        """
+        Query for multiple images in a single database operation.
+
+        Args:
+            requests: List of (character, emotion) tuples
+
+        Returns:
+            Dictionary mapping (character, emotion) to image path
+        """
+        # Build unique character-emotion pairs
+        unique_pairs = list(set(requests))
+
+        if not unique_pairs:
+            return {}
+
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.cursor()
+
+            # Build IN clause for batch query
+            placeholders = ','.join(['(?, ?)'] * len(unique_pairs))
+            query = f"""
+                SELECT character, emotion, file_path, usage_count, quality_score
+                FROM image_library
+                WHERE (character, emotion) IN (VALUES {placeholders})
+                ORDER BY usage_count ASC, quality_score DESC, RANDOM()
+            """
+
+            # Flatten the pairs for the query
+            params = [item for pair in unique_pairs for item in pair]
+
+            cursor.execute(query, params)
+            rows = cursor.fetchall()
+
+            # Group results by (character, emotion)
+            results = {}
+            for row in rows:
+                character, emotion, file_path, usage_count, quality_score = row
+                key = (character, emotion)
+
+                # Only keep the first (best) result for each pair
+                if key not in results:
+                    # Validate path
+                    if self._validate_image_path(file_path) and Path(file_path).exists():
+                        results[key] = file_path
+                    else:
+                        # Invalid or missing file, remove from database
+                        cursor.execute("DELETE FROM image_library WHERE file_path = ?", (file_path,))
+
+            conn.commit()
+            return results
+
     def process_script(
         self,
         script: List[Dict[str, str]],
-        fallback_emotions: Dict[str, List[str]] = None
+        fallback_emotions: Dict[str, List[str]] = None,
+        use_batch: bool = True
     ) -> Dict:
         """
         Process a script and select images for each line.
@@ -211,6 +314,7 @@ class ImageSelector:
         Args:
             script: List of dialogue line dictionaries
             fallback_emotions: Dictionary mapping emotions to fallback emotions
+            use_batch: Use batch database queries for better performance
 
         Returns:
             Dictionary with image selections and missing images list
@@ -227,6 +331,17 @@ class ImageSelector:
                 "neutral": []
             }
 
+        if use_batch:
+            return self._process_script_batch(script, fallback_emotions)
+        else:
+            return self._process_script_sequential(script, fallback_emotions)
+
+    def _process_script_sequential(
+        self,
+        script: List[Dict[str, str]],
+        fallback_emotions: Dict[str, List[str]]
+    ) -> Dict:
+        """Process script with individual queries (original behavior)."""
         results = {
             'selections': [],
             'missing': [],
@@ -246,6 +361,92 @@ class ImageSelector:
             image_path = self.select_image(character, emotion, fallbacks)
 
             if image_path:
+                results['selections'].append({
+                    'line_index': i,
+                    'character': character,
+                    'emotion': emotion,
+                    'image_path': image_path,
+                    'found': True
+                })
+                results['stats']['images_found'] += 1
+            else:
+                results['selections'].append({
+                    'line_index': i,
+                    'character': character,
+                    'emotion': emotion,
+                    'image_path': None,
+                    'found': False
+                })
+                results['missing'].append({
+                    'character': character,
+                    'emotion': emotion
+                })
+                results['stats']['images_missing'] += 1
+
+                logger.warning(f"Line {i}: Missing image for {character}/{emotion}")
+
+        return results
+
+    def _process_script_batch(
+        self,
+        script: List[Dict[str, str]],
+        fallback_emotions: Dict[str, List[str]]
+    ) -> Dict:
+        """Process script with batch database queries for better performance."""
+        results = {
+            'selections': [],
+            'missing': [],
+            'stats': {
+                'total_lines': len(script),
+                'images_found': 0,
+                'images_missing': 0
+            }
+        }
+
+        # Build all query requests (including fallbacks)
+        all_requests = []
+        line_requests = []  # Track which requests go with which line
+
+        for i, line in enumerate(script, 1):
+            character = line['character']
+            emotion = line.get('emotion', 'neutral')
+
+            # Build list of emotions to try (primary + fallbacks)
+            emotions_to_try = [emotion]
+            fallbacks = fallback_emotions.get(emotion.lower(), [])
+            emotions_to_try.extend(fallbacks)
+
+            # Add neutral as last resort if not already included
+            if 'neutral' not in emotions_to_try:
+                emotions_to_try.append('neutral')
+
+            # Create request tuples
+            line_reqs = [(character, emo) for emo in emotions_to_try]
+            all_requests.extend(line_reqs)
+            line_requests.append((i, line, line_reqs))
+
+        # Execute batch query
+        logger.info(f"Batch querying {len(set(all_requests))} unique image combinations")
+        image_map = self._batch_query_images(all_requests)
+
+        # Process results for each line
+        for i, line, reqs in line_requests:
+            character = line['character']
+            emotion = line.get('emotion', 'neutral')
+
+            # Find first matching image from request list
+            image_path = None
+            for req in reqs:
+                if req in image_map:
+                    image_path = image_map[req]
+                    if req[1] != emotion:
+                        logger.info(f"Line {i}: Using fallback emotion '{req[1]}' for {character}/{emotion}")
+                    break
+
+            if image_path:
+                # Record usage
+                self._record_usage(image_path)
+
                 results['selections'].append({
                     'line_index': i,
                     'character': character,

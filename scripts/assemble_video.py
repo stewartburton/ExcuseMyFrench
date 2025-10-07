@@ -48,6 +48,38 @@ class VideoAssembler:
 
         logger.info(f"Video settings: {self.width}x{self.height} @ {self.fps}fps")
 
+    def _validate_file_path(self, file_path: str) -> bool:
+        """
+        Validate that a file path is within the allowed data directory.
+
+        Args:
+            file_path: Path to validate
+
+        Returns:
+            True if path is valid, False otherwise
+        """
+        try:
+            # Get the base data directory (resolve to absolute path)
+            base_dir = Path("data").resolve()
+
+            # Resolve the file path to its canonical absolute path
+            resolved_path = Path(file_path).resolve()
+
+            # Check if the resolved path is within the base directory
+            if hasattr(resolved_path, 'is_relative_to'):
+                # Python 3.9+
+                return resolved_path.is_relative_to(base_dir)
+            else:
+                # Python 3.8 fallback
+                try:
+                    resolved_path.relative_to(base_dir)
+                    return True
+                except ValueError:
+                    return False
+        except Exception as e:
+            logger.error(f"Error validating path {file_path}: {e}")
+            return False
+
     def create_image_clip(
         self,
         image_path: str,
@@ -345,6 +377,66 @@ class VideoAssembler:
         with open(image_selections_path, 'r') as f:
             selections = json.load(f)
 
+        # Validate timeline structure
+        if not isinstance(timeline, dict):
+            raise ValueError("Timeline must be a dictionary")
+
+        if 'episode' not in timeline:
+            raise ValueError("Timeline missing 'episode' field")
+
+        if 'lines' not in timeline:
+            raise ValueError("Timeline missing 'lines' field")
+
+        if not isinstance(timeline['lines'], list):
+            raise ValueError("Timeline 'lines' must be a list")
+
+        if not timeline['lines']:
+            raise ValueError("Timeline 'lines' cannot be empty")
+
+        # Validate selections structure
+        if not isinstance(selections, dict):
+            raise ValueError("Selections must be a dictionary")
+
+        if 'episode' not in selections:
+            raise ValueError("Selections missing 'episode' field")
+
+        if 'selections' not in selections:
+            raise ValueError("Selections missing 'selections' field")
+
+        if not isinstance(selections['selections'], list):
+            raise ValueError("Selections 'selections' must be a list")
+
+        # Validate episode name consistency
+        if timeline['episode'] != selections['episode']:
+            raise ValueError(
+                f"Episode name mismatch: timeline has '{timeline['episode']}', "
+                f"selections has '{selections['episode']}'"
+            )
+
+        # Validate all timeline lines have corresponding selections
+        timeline_indices = {line['index'] for line in timeline['lines']}
+        selection_indices = {sel['line_index'] for sel in selections['selections']}
+
+        missing_selections = timeline_indices - selection_indices
+        if missing_selections:
+            raise ValueError(
+                f"Missing image selections for line indices: {sorted(missing_selections)}"
+            )
+
+        # Validate all required fields exist in timeline lines
+        for i, line in enumerate(timeline['lines'], 1):
+            required_fields = ['index', 'audio_file', 'duration']
+            missing = [f for f in required_fields if f not in line]
+            if missing:
+                raise ValueError(f"Timeline line {i} missing required fields: {missing}")
+
+        # Validate all required fields exist in selections
+        for i, sel in enumerate(selections['selections'], 1):
+            required_fields = ['line_index', 'image_path']
+            missing = [f for f in required_fields if f not in sel]
+            if missing:
+                raise ValueError(f"Selection {i} missing required fields: {missing}")
+
         episode_name = timeline['episode']
         output_path = Path(output_dir)
         output_path.mkdir(parents=True, exist_ok=True)
@@ -367,15 +459,30 @@ class VideoAssembler:
                         image_path = sel['image_path']
                         break
 
-                if not image_path or not Path(image_path).exists():
-                    logger.error(f"Image not found for line {i+1}")
-                    raise FileNotFoundError(f"Missing image for line {i+1}")
+                if not image_path:
+                    logger.error(f"Image path not found for line {i+1}")
+                    raise FileNotFoundError(f"Missing image path for line {i+1}")
+
+                # Validate image path to prevent traversal attacks
+                if not self._validate_file_path(image_path):
+                    logger.error(f"Invalid image path for line {i+1} (not within data/ directory): {image_path}")
+                    raise ValueError(f"Invalid image path for line {i+1}")
+
+                if not Path(image_path).exists():
+                    logger.error(f"Image file not found for line {i+1}: {image_path}")
+                    raise FileNotFoundError(f"Missing image file for line {i+1}")
+
+                # Validate audio file path to prevent traversal attacks
+                audio_file = line['audio_file']
+                if not self._validate_file_path(audio_file):
+                    logger.error(f"Invalid audio path for line {i+1} (not within data/ directory): {audio_file}")
+                    raise ValueError(f"Invalid audio path for line {i+1}")
 
                 # Create clip
                 clip_path = temp_dir / f"clip_{i+1:03d}.mp4"
                 self.create_image_clip(image_path, line['duration'], str(clip_path))
                 clip_files.append(str(clip_path))
-                audio_files.append(line['audio_file'])
+                audio_files.append(audio_file)
 
             # Step 2: Concatenate video clips
             video_no_audio = temp_dir / "video_no_audio.mp4"
@@ -386,10 +493,19 @@ class VideoAssembler:
             self.add_audio(str(video_no_audio), audio_files, timeline, str(video_with_audio))
 
             # Step 4: Add background music (if provided)
-            if music_path and Path(music_path).exists():
-                video_with_music = temp_dir / "video_with_music.mp4"
-                self.add_background_music(str(video_with_audio), music_path, str(video_with_music))
-                current_video = video_with_music
+            if music_path:
+                # Validate music path to prevent traversal attacks
+                if not self._validate_file_path(music_path):
+                    logger.error(f"Invalid music path (not within data/ directory): {music_path}")
+                    raise ValueError("Invalid music path")
+
+                if Path(music_path).exists():
+                    video_with_music = temp_dir / "video_with_music.mp4"
+                    self.add_background_music(str(video_with_audio), music_path, str(video_with_music))
+                    current_video = video_with_music
+                else:
+                    logger.warning(f"Music file not found: {music_path}, skipping background music")
+                    current_video = video_with_audio
             else:
                 current_video = video_with_audio
 

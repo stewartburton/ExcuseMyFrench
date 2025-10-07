@@ -26,3 +26,6 @@ Pillow>=10.0
 
 # Database
 # SQLite is built into Python, no additional package needed
+
+# Social Media Posting
+requests>=2.31.0

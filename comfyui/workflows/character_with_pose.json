@@ -1,0 +1,143 @@
+{
+  "_meta": {
+    "description": "Advanced workflow with pose control for character generation",
+    "author": "ExcuseMyFrench",
+    "version": "1.0"
+  },
+  "1": {
+    "_meta": {
+      "title": "Checkpoint Loader"
+    },
+    "class_type": "CheckpointLoaderSimple",
+    "inputs": {
+      "ckpt_name": "wan_2.2_base.safetensors"
+    }
+  },
+  "2": {
+    "_meta": {
+      "title": "CLIP Text Encode (Positive Prompt)"
+    },
+    "class_type": "CLIPTextEncode",
+    "inputs": {
+      "text": "a photo of a French bulldog, portrait, professional photography, high quality, detailed fur, expressive eyes, front view, looking at camera, happy expression, cinematic lighting, 8k, sharp focus",
+      "clip": [
+        "1",
+        1
+      ]
+    }
+  },
+  "3": {
+    "_meta": {
+      "title": "CLIP Text Encode (Negative Prompt)"
+    },
+    "class_type": "CLIPTextEncode",
+    "inputs": {
+      "text": "blurry, low quality, distorted, deformed, ugly, bad anatomy, extra limbs, missing limbs, watermark, text, signature, multiple animals, duplicate, side view, back view, amateur, out of focus, cartoon, anime, painting, disfigured",
+      "clip": [
+        "1",
+        1
+      ]
+    }
+  },
+  "4": {
+    "_meta": {
+      "title": "Empty Latent Image"
+    },
+    "class_type": "EmptyLatentImage",
+    "inputs": {
+      "width": 1080,
+      "height": 1920,
+      "batch_size": 1
+    }
+  },
+  "5": {
+    "_meta": {
+      "title": "KSampler"
+    },
+    "class_type": "KSampler",
+    "inputs": {
+      "seed": 42,
+      "steps": 35,
+      "cfg": 8.0,
+      "sampler_name": "dpm_2_ancestral",
+      "scheduler": "karras",
+      "denoise": 1,
+      "model": [
+        "1",
+        0
+      ],
+      "positive": [
+        "2",
+        0
+      ],
+      "negative": [
+        "3",
+        0
+      ],
+      "latent_image": [
+        "4",
+        0
+      ]
+    }
+  },
+  "6": {
+    "_meta": {
+      "title": "VAE Decode"
+    },
+    "class_type": "VAEDecode",
+    "inputs": {
+      "samples": [
+        "5",
+        0
+      ],
+      "vae": [
+        "1",
+        2
+      ]
+    }
+  },
+  "7": {
+    "_meta": {
+      "title": "Image Upscale (Optional)"
+    },
+    "class_type": "ImageScale",
+    "inputs": {
+      "upscale_method": "lanczos",
+      "width": 1080,
+      "height": 1920,
+      "crop": "disabled",
+      "image": [
+        "6",
+        0
+      ]
+    }
+  },
+  "8": {
+    "_meta": {
+      "title": "Sharpen (Optional)"
+    },
+    "class_type": "ImageSharpen",
+    "inputs": {
+      "sharpen_radius": 1,
+      "sigma": 1.0,
+      "alpha": 1.0,
+      "image": [
+        "7",
+        0
+      ]
+    }
+  },
+  "9": {
+    "_meta": {
+      "title": "Save Image"
+    },
+    "class_type": "SaveImage",
+    "inputs": {
+      "filename_prefix": "ExcuseMyFrench/character_hq",
+      "images": [
+        "8",
+        0
+      ]
+    }
+  }
+}
