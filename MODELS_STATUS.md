@@ -1,18 +1,22 @@
 # Models Download Status
 
-**Last Updated:** October 7, 2025, 11:30 PM
-**DreamBooth Training:** In progress (check with `nvidia-smi`)
+**Last Updated:** October 7, 2025, 11:45 PM
+**DreamBooth Training:** 🔄 78.6% complete (629/800 steps) - ~37 minutes remaining
 
 ---
 
 ## ✅ Successfully Downloaded Models
 
 ### 1. DreamBooth Butcher Model (Training in Progress)
-- **Status:** 75% complete (600/800 steps)
+- **Status:** 🔄 78.6% complete (629/800 steps)
 - **Location:** `models/dreambooth_butcher/`
 - **Latest Checkpoint:** `checkpoint-600/` (3.3GB model + 6.5GB optimizer)
 - **Validation Images:** Generated at steps 300, 400, 500, 600
-- **Next:** Continue training to step 800 (~20-30 minutes remaining)
+- **Training Speed:** ~13 seconds/step on RTX 4070
+- **Time Remaining:** ~37 minutes to completion
+- **Next Checkpoint:** Step 700 (~15 minutes)
+- **Next:** Continue training to step 800/800
+- **Post-Training:** Run `python scripts/validate_trained_model.py` for quality check
 
 ### 2. Wav2Lip Models ✅
 - **Location:** `models/wav2lip/`
@@ -63,36 +67,54 @@
 
 ## 📋 Next Steps
 
-### Priority 1: Wait for DreamBooth Training to Complete
+### Priority 1: Wait for DreamBooth Training to Complete (~37 minutes)
 ```bash
 # Monitor training progress:
-nvidia-smi  # Check GPU usage
+nvidia-smi  # Check GPU usage (should be 90-100%)
 
-# Or check training logs for current step
 # Training should complete at step 800/800
+# Current: 629/800 (78.6%)
+# Next checkpoint: 700/800 (~15 minutes)
 ```
 
-### Priority 2: Test Animation Pipeline
+### Priority 2: Validate Trained Model (5-10 minutes)
 ```bash
-# Once DreamBooth completes, test the full pipeline:
+# Once training completes, validate model quality:
+python scripts/validate_trained_model.py
 
-# 1. Generate character images with DreamBooth
-python scripts/generate_character_image.py \
-  --character butcher \
-  --emotion happy \
-  --prompt "a photo of sks dog, happy expression"
-
-# 2. Test Wav2Lip lip-sync
-# (Script to be created - see TODO.md)
-
-# 3. Test SadTalker animation
-# (Script to be created - see TODO.md)
+# This will:
+# - Generate 4 test images (happy, sarcastic, grumpy, neutral)
+# - Create quality report: reports/model_validation.md
+# - Provide recommendations if quality needs improvement
 ```
 
-### Priority 3: Review Documentation
+### Priority 3: Generate Your First Video! (10-15 minutes)
+```bash
+# Complete end-to-end workflow:
+bash scripts/generate_first_video.sh
+
+# This will:
+# 1. Generate script from trending topics
+# 2. Generate character voices (ElevenLabs)
+# 3. Generate character images (DreamBooth)
+# 4. Match images to timeline
+# 5. Assemble final video
+#
+# Prerequisites:
+# - API keys configured in config/.env
+# - See TODO.md for setup instructions
+```
+
+### Priority 4: Set Up API Keys
+- 📖 See `TODO.md` for configuration steps
+- Required: OpenAI/Anthropic, ElevenLabs, HuggingFace
+- Optional: Instagram (for auto-posting)
+
+### Priority 5: Review Documentation
 - ✅ Model downloads complete - See `docs/MODEL_DOWNLOADS.md`
 - ✅ Testing guide - See `docs/TESTING.md`
-- 📖 Next: Set up API keys and test full pipeline - See `TODO.md`
+- ✅ Video creation guide - See `docs/VIDEO_CREATION_GUIDE.md`
+- 📖 Next steps roadmap - See `TODO.md`
 
 ---
 

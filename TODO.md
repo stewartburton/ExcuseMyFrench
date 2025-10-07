@@ -26,16 +26,21 @@ This document tracks all remaining tasks to complete the ExcuseMyFrench project.
   - **Details:** The model will be downloaded to HuggingFace cache directory
   - **Blocker:** DreamBooth training cannot start without this
 
-- [ ] **Train Butcher DreamBooth Model**
+- [🔄] **Train Butcher DreamBooth Model** 🔄 IN PROGRESS
   - **Priority:** HIGH - Required for consistent character generation
   - **Estimated Time:** 2-3 hours (RTX 4070)
   - **Dependencies:** Stable Diffusion base model downloaded
+  - **Current Status:** Training at 78.6% (629/800 steps)
+  - **Time Remaining:** ~37 minutes
+  - **Speed:** ~13 seconds/step on RTX 4070
+  - **Next Checkpoint:** Step 700 (~15 minutes)
   - **Action:**
     ```bash
     python scripts/train_dreambooth.py --config training/config/butcher_config.yaml
     ```
-  - **Status:** Training data ready (23 validated images)
+  - **Training Data:** 23 validated images
   - **Output:** Custom model at `models/dreambooth_butcher/`
+  - **Validation Script Ready:** `scripts/validate_trained_model.py` (run after completion)
 
 ### API Configuration
 
@@ -159,18 +164,24 @@ This document tracks all remaining tasks to complete the ExcuseMyFrench project.
 
 ### Character Image Generation
 
-- [ ] **Test DreamBooth Model (After Training)**
+- [ ] **Validate DreamBooth Model (After Training)**
   - **Priority:** HIGH
-  - **Estimated Time:** 2-3 minutes per image
+  - **Estimated Time:** 5-10 minutes (generates 4 test images)
   - **Dependencies:** DreamBooth training completed
   - **Action:**
     ```bash
+    # Automatic validation with quality report
+    python scripts/validate_trained_model.py
+
+    # Or manually test specific emotions
     python scripts/generate_character_image.py \
       --character butcher \
       --emotion happy \
       --prompt "a photo of sks dog, happy expression, professional photography"
     ```
-  - **Verify:** Generated image looks like Butcher
+  - **Output:** Validation report in `reports/model_validation.md`
+  - **Test Images:** `data/validation/` (happy, sarcastic, grumpy, neutral)
+  - **Verify:** Generated images look like Butcher with distinct emotions
   - **Note:** May need to adjust prompt or retrain if quality is poor
 
 ---
@@ -554,11 +565,12 @@ This document tracks all remaining tasks to complete the ExcuseMyFrench project.
 
 **Focus:** Get basic pipeline working end-to-end
 
-1. Download Stable Diffusion base model ⬜
-2. Train Butcher DreamBooth model ⬜
-3. Configure all required API keys ⬜
-4. Run full end-to-end pipeline test ⬜
-5. Generate first production-ready video ⬜
+1. Download Stable Diffusion base model ✅ (auto-downloaded during training)
+2. Train Butcher DreamBooth model 🔄 IN PROGRESS (78.6%, ~37min remaining)
+3. Validate trained model ⬜ (use `scripts/validate_trained_model.py`)
+4. Configure all required API keys ⬜
+5. Generate first video ⬜ (use `bash scripts/generate_first_video.sh`)
+6. Run full end-to-end pipeline test ⬜
 
 ### Next Sprint (Days 8-14)
 
