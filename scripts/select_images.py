@@ -55,6 +55,39 @@ class ImageSelector:
             )
         logger.info(f"Using database at {self.db_path}")
 
+    def _validate_image_path(self, file_path: str) -> bool:
+        """
+        Validate that an image path is within the allowed data directory.
+
+        Args:
+            file_path: Path to validate
+
+        Returns:
+            True if path is valid, False otherwise
+        """
+        try:
+            # Get the base data directory (resolve to absolute path)
+            base_dir = Path("data").resolve()
+
+            # Resolve the file path to its canonical absolute path
+            resolved_path = Path(file_path).resolve()
+
+            # Check if the resolved path is within the base directory
+            # is_relative_to() checks if this path starts with the base_dir path
+            if hasattr(resolved_path, 'is_relative_to'):
+                # Python 3.9+
+                return resolved_path.is_relative_to(base_dir)
+            else:
+                # Python 3.8 fallback
+                try:
+                    resolved_path.relative_to(base_dir)
+                    return True
+                except ValueError:
+                    return False
+        except Exception as e:
+            logger.error(f"Error validating path {file_path}: {e}")
+            return False
+
     def add_image(
         self,
         character: str,
@@ -78,6 +111,11 @@ class ImageSelector:
         Returns:
             True if added successfully, False otherwise
         """
+        # Validate path to prevent traversal attacks
+        if not self._validate_image_path(file_path):
+            logger.error(f"Invalid image path (must be within data/ directory): {file_path}")
+            return False
+
         # Verify file exists
         if not Path(file_path).exists():
             logger.error(f"Image file not found: {file_path}")
@@ -175,8 +213,17 @@ class ImageSelector:
             row = cursor.fetchone()
 
             if row:
-                # Verify file still exists
+                # Verify file still exists and is within valid directory
                 file_path = row[0]
+
+                # Validate path to prevent traversal attacks
+                if not self._validate_image_path(file_path):
+                    logger.error(f"Invalid image path in database (not within data/ directory): {file_path}")
+                    # Remove from database for security
+                    cursor.execute("DELETE FROM image_library WHERE file_path = ?", (file_path,))
+                    conn.commit()
+                    return None
+
                 if Path(file_path).exists():
                     return file_path
                 else:

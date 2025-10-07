@@ -82,6 +82,17 @@ class AudioGenerator:
         Returns:
             Audio data as bytes
         """
+        # Validate text input
+        if not isinstance(text, str):
+            raise TypeError("text must be a string")
+
+        if not text or not text.strip():
+            raise ValueError("text cannot be empty")
+
+        # ElevenLabs API has a 5000 character limit per request
+        if len(text) > 5000:
+            raise ValueError(f"Text too long ({len(text)} chars). Maximum is 5000 characters.")
+
         if character not in self.voice_ids:
             raise ValueError(f"Unknown character: {character}")
 
@@ -231,10 +242,33 @@ class AudioGenerator:
             filepath = output_path / filename
 
             try:
-                # Generate audio
+                # Generate audio with retry logic and exponential backoff
                 logger.info(f"[{i}/{len(script)}] Generating audio for {character}...")
 
-                audio_bytes = self.generate_audio(text, character, emotion)
+                max_retries = 3
+                base_delay = 2.0
+                audio_bytes = None
+
+                for retry in range(max_retries):
+                    try:
+                        audio_bytes = self.generate_audio(text, character, emotion)
+                        break  # Success, exit retry loop
+                    except Exception as e:
+                        # Check if it's a rate limit error (ElevenLabs raises different exceptions)
+                        error_str = str(e).lower()
+                        is_rate_limit = any(phrase in error_str for phrase in ['rate limit', 'too many requests', '429'])
+
+                        if is_rate_limit and retry < max_retries - 1:
+                            wait_time = (2 ** retry) * base_delay
+                            logger.warning(f"Rate limit hit, retrying in {wait_time:.1f}s (attempt {retry + 1}/{max_retries})...")
+                            time.sleep(wait_time)
+                        else:
+                            # Not a rate limit error or final retry, re-raise
+                            raise
+
+                if audio_bytes is None:
+                    raise Exception("Failed to generate audio after retries")
+
                 self.save_audio(audio_bytes, filepath)
 
                 # Get duration

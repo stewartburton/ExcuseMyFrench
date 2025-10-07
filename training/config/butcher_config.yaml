@@ -1,0 +1,149 @@
+# DreamBooth Training Configuration for Butcher the French Bulldog
+# ==================================================================
+# This configuration file contains all parameters for training a custom
+# Stable Diffusion model that can generate consistent images of Butcher.
+
+# Model Settings
+# --------------
+# Base model to fine-tune from Hugging Face
+base_model: "runwayml/stable-diffusion-v1-5"
+revision: null  # Use 'fp16' for half precision base model if available
+
+# Training Data Paths
+# -------------------
+# Path to instance images (photos of Butcher)
+instance_data_dir: "training/butcher/images"
+
+# Instance prompt - the unique identifier "sks" represents Butcher
+instance_prompt: "a photo of sks dog"
+
+# Prior Preservation Settings
+# ----------------------------
+# Prior preservation helps the model maintain its general knowledge of dogs
+# while learning Butcher's specific appearance
+with_prior_preservation: true
+
+# Path where class images will be generated/stored
+class_data_dir: "training/butcher/class_images"
+
+# Class prompt for generating prior preservation images
+class_prompt: "a photo of a french bulldog"
+
+# Number of class images to generate for prior preservation
+num_class_images: 200
+
+# Weight for prior preservation loss (1.0 = equal weight with instance loss)
+prior_loss_weight: 1.0
+
+# Output Settings
+# ---------------
+# Directory where the trained model will be saved
+output_dir: "models/dreambooth_butcher"
+
+# Directory for training logs (TensorBoard)
+logging_dir: "logs/dreambooth"
+
+# Training Hyperparameters
+# ------------------------
+# Batch size per GPU/CPU (1 is recommended for DreamBooth)
+train_batch_size: 1
+
+# Number of gradient accumulation steps (increase if you want larger effective batch size)
+gradient_accumulation_steps: 1
+
+# Learning rate - conservative value for stability
+# Lower values (2e-6) for more training images or longer training
+# Higher values (1e-5) for fewer images or shorter training
+learning_rate: 5.0e-6
+
+# Learning rate scheduler
+# Options: "linear", "cosine", "constant", "constant_with_warmup"
+lr_scheduler: "constant"
+
+# Number of warmup steps for learning rate scheduler
+lr_warmup_steps: 0
+
+# Total number of training steps
+# Adjust based on dataset size:
+# - 5-10 images: 400-600 steps
+# - 10-15 images: 600-1000 steps
+# - 15-20 images: 800-1200 steps
+max_train_steps: 800
+
+# Model Training Settings
+# -----------------------
+# Whether to train the text encoder (CLIP)
+# false = faster training, less overfitting (recommended)
+# true = better text understanding, slower training
+train_text_encoder: false
+
+# Enable gradient checkpointing to reduce memory usage
+# true = lower memory usage, slightly slower
+# false = higher memory usage, faster
+gradient_checkpointing: true
+
+# Use 8-bit Adam optimizer to reduce memory usage
+# Requires: pip install bitsandbytes
+# true = lower memory, slightly slower
+# false = standard optimizer
+use_8bit_adam: false
+
+# Mixed precision training
+# Options: "no", "fp16", "bf16"
+# "fp16" = faster training, lower memory (recommended for most GPUs)
+# "bf16" = better for newer GPUs (A100, etc.)
+# "no" = full precision (slower, more memory)
+mixed_precision: "fp16"
+
+# Data Settings
+# -------------
+# Training image resolution
+# 512 = SD 1.5 standard (recommended)
+# 768 = higher quality, more memory
+resolution: 512
+
+# Center crop images to square before resizing
+center_crop: true
+
+# Checkpointing & Validation
+# ---------------------------
+# Save checkpoint every N steps
+checkpointing_steps: 100
+
+# Run validation every N steps (0 to disable)
+validation_steps: 100
+
+# Validation prompts to test model during training
+validation_prompts:
+  - "a photo of sks dog, happy expression, portrait"
+  - "a photo of sks dog, french bulldog, sitting"
+  - "a photo of sks dog, excited, front view"
+  - "a photo of sks dog, neutral expression, professional photography"
+  - "a photo of sks dog, close up, detailed"
+
+# Misc Settings
+# -------------
+# Random seed for reproducibility (null for random)
+seed: 42
+
+# Maximum gradient norm for clipping (prevents training instability)
+max_grad_norm: 1.0
+
+# Notes
+# -----
+# Training Tips:
+# 1. Start with 800 steps and adjust based on results
+# 2. If model doesn't look like Butcher, increase steps or add more images
+# 3. If model is overfitting (only generates training poses), reduce steps
+# 4. Monitor validation images to check training progress
+# 5. Best results with 15-20 varied, high-quality training images
+#
+# Memory Usage:
+# - Resolution 512, batch 1, fp16: ~6GB VRAM
+# - Resolution 768, batch 1, fp16: ~10GB VRAM
+# - Use gradient_checkpointing and 8bit_adam to reduce memory
+#
+# Training Time (800 steps):
+# - RTX 3090: ~15 minutes
+# - RTX 3060: ~30 minutes
+# - CPU: ~4 hours (not recommended)

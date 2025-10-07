@@ -1,0 +1,239 @@
+{
+  "name": "ExcuseMyFrench - System Monitoring & Health Checks",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "*/30 * * * *"
+            }
+          ]
+        }
+      },
+      "id": "monitor-schedule",
+      "name": "Monitor Schedule (Every 30 min)",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.1,
+      "position": [250, 300]
+    },
+    {
+      "parameters": {
+        "command": "cd /path/to/ExcuseMyFrench && python3 scripts/n8n_helpers/status_reporter.py --check-database"
+      },
+      "id": "check-database",
+      "name": "Check Database Health",
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [450, 200],
+      "alwaysOutputData": true,
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "command": "df -h /path/to/ExcuseMyFrench/data | tail -1 | awk '{print $5}' | sed 's/%//'"
+      },
+      "id": "check-storage",
+      "name": "Check Storage Space",
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [450, 350],
+      "alwaysOutputData": true,
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "command": "cd /path/to/ExcuseMyFrench && python3 scripts/n8n_helpers/status_reporter.py --check-api-quotas"
+      },
+      "id": "check-api-quotas",
+      "name": "Check API Quotas",
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [450, 500],
+      "alwaysOutputData": true,
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "command": "test -f /path/to/ExcuseMyFrench/data/logs/app.log && tail -100 /path/to/ExcuseMyFrench/data/logs/app.log | grep -i error | wc -l || echo '0'"
+      },
+      "id": "check-errors",
+      "name": "Check Recent Errors",
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [450, 650],
+      "alwaysOutputData": true,
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "jsCode": "// Aggregate monitoring results\nconst dbCheck = $input.item.json;\nconst storageCheck = $('Check Storage Space').item.json;\nconst apiCheck = $('Check API Quotas').item.json;\nconst errorCheck = $('Check Recent Errors').item.json;\n\n// Parse storage usage\nconst storageUsage = parseInt(storageCheck.stdout.trim());\nconst storageWarning = storageUsage > 80;\nconst storageCritical = storageUsage > 90;\n\n// Parse error count\nconst errorCount = parseInt(errorCheck.stdout.trim());\nconst errorsDetected = errorCount > 10;\n\n// Determine overall health\nlet healthStatus = 'healthy';\nlet alerts = [];\n\nif (storageCritical) {\n  healthStatus = 'critical';\n  alerts.push(`Storage critically low: ${storageUsage}% used`);\n} else if (storageWarning) {\n  healthStatus = 'warning';\n  alerts.push(`Storage warning: ${storageUsage}% used`);\n}\n\nif (errorsDetected) {\n  healthStatus = healthStatus === 'critical' ? 'critical' : 'warning';\n  alerts.push(`${errorCount} errors detected in recent logs`);\n}\n\nif (dbCheck.exitCode !== 0) {\n  healthStatus = 'critical';\n  alerts.push('Database health check failed');\n}\n\nif (apiCheck.exitCode !== 0) {\n  healthStatus = 'warning';\n  alerts.push('API quota check failed');\n}\n\nreturn {\n  health_status: healthStatus,\n  storage_usage: storageUsage,\n  recent_errors: errorCount,\n  database_status: dbCheck.exitCode === 0 ? 'ok' : 'error',\n  api_status: apiCheck.exitCode === 0 ? 'ok' : 'error',\n  alerts: alerts,\n  timestamp: new Date().toISOString(),\n  needs_notification: healthStatus !== 'healthy'\n};"
+      },
+      "id": "aggregate-results",
+      "name": "Aggregate Results",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [650, 400]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{ $json.needs_notification }}",
+              "value2": true
+            }
+          ]
+        }
+      },
+      "id": "check-alerts",
+      "name": "Check if Alerts Needed",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [850, 400]
+    },
+    {
+      "parameters": {
+        "authentication": "none",
+        "requestMethod": "POST",
+        "url": "={{ $env.NOTIFICATION_WEBHOOK }}",
+        "options": {
+          "bodyContentType": "json"
+        },
+        "bodyParametersJson": "={\n  \"text\": \"⚠️ ExcuseMyFrench System Alert\",\n  \"blocks\": [\n    {\n      \"type\": \"header\",\n      \"text\": {\n        \"type\": \"plain_text\",\n        \"text\": \"System Health Alert: {{ $json.health_status }}\"\n      }\n    },\n    {\n      \"type\": \"section\",\n      \"fields\": [\n        {\n          \"type\": \"mrkdwn\",\n          \"text\": \"*Storage Usage:*\\n{{ $json.storage_usage }}%\"\n        },\n        {\n          \"type\": \"mrkdwn\",\n          \"text\": \"*Recent Errors:*\\n{{ $json.recent_errors }}\"\n        },\n        {\n          \"type\": \"mrkdwn\",\n          \"text\": \"*Database:*\\n{{ $json.database_status }}\"\n        },\n        {\n          \"type\": \"mrkdwn\",\n          \"text\": \"*API Status:*\\n{{ $json.api_status }}\"\n        }\n      ]\n    },\n    {\n      \"type\": \"section\",\n      \"text\": {\n        \"type\": \"mrkdwn\",\n        \"text\": \"*Alerts:*\\n{{ $json.alerts.join('\\n') }}\"\n      }\n    },\n    {\n      \"type\": \"context\",\n      \"elements\": [\n        {\n          \"type\": \"mrkdwn\",\n          \"text\": \"Timestamp: {{ $json.timestamp }}\"\n        }\n      ]\n    }\n  ]\n}"
+      },
+      "id": "send-alert",
+      "name": "Send Alert Notification",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [1050, 300]
+    },
+    {
+      "parameters": {
+        "authentication": "none",
+        "requestMethod": "POST",
+        "url": "={{ $env.NOTIFICATION_EMAIL }}",
+        "options": {
+          "bodyContentType": "json"
+        },
+        "bodyParametersJson": "={\n  \"to\": \"{{ $env.NOTIFICATION_EMAIL }}\",\n  \"subject\": \"ExcuseMyFrench System Alert - {{ $json.health_status }}\",\n  \"body\": \"System Health Status: {{ $json.health_status }}\\n\\nStorage Usage: {{ $json.storage_usage }}%\\nRecent Errors: {{ $json.recent_errors }}\\nDatabase: {{ $json.database_status }}\\nAPI Status: {{ $json.api_status }}\\n\\nAlerts:\\n{{ $json.alerts.join('\\n') }}\\n\\nTimestamp: {{ $json.timestamp }}\"\n}"
+      },
+      "id": "send-email-critical",
+      "name": "Send Email (Critical)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [1050, 450],
+      "executeOnce": false,
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "command": "cd /path/to/ExcuseMyFrench && python3 scripts/n8n_helpers/status_reporter.py --save-metrics --data '{{ JSON.stringify($json) }}'"
+      },
+      "id": "save-metrics",
+      "name": "Save Metrics to Database",
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [850, 600],
+      "alwaysOutputData": true,
+      "continueOnFail": true
+    }
+  ],
+  "connections": {
+    "Monitor Schedule (Every 30 min)": {
+      "main": [
+        [
+          {
+            "node": "Check Database Health",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Check Storage Space",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Check API Quotas",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Check Recent Errors",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Database Health": {
+      "main": [
+        [
+          {
+            "node": "Aggregate Results",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Aggregate Results": {
+      "main": [
+        [
+          {
+            "node": "Check if Alerts Needed",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Save Metrics to Database",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check if Alerts Needed": {
+      "main": [
+        [
+          {
+            "node": "Send Alert Notification",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Alert Notification": {
+      "main": [
+        [
+          {
+            "node": "Send Email (Critical)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "1.0.0",
+  "id": "excusemyfrench-monitoring",
+  "meta": {
+    "instanceId": "excusemyfrench"
+  },
+  "tags": [
+    {
+      "name": "monitoring",
+      "id": "3"
+    },
+    {
+      "name": "health-check",
+      "id": "4"
+    }
+  ]
+}

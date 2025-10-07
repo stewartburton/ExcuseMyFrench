@@ -1,0 +1,555 @@
+{
+  "name": "ExcuseMyFrench - Main Video Generation Pipeline",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 9 * * *"
+            }
+          ]
+        }
+      },
+      "id": "schedule-trigger",
+      "name": "Schedule Trigger",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.1,
+      "position": [250, 300]
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "excusemyfrench-pipeline",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook-trigger",
+      "name": "Webhook Trigger",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [250, 500],
+      "webhookId": "excusemyfrench-pipeline"
+    },
+    {
+      "parameters": {
+        "values": {
+          "string": [
+            {
+              "name": "pipeline_id",
+              "value": "={{ $now.toISO() }}"
+            },
+            {
+              "name": "status",
+              "value": "started"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "init-pipeline",
+      "name": "Initialize Pipeline",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3,
+      "position": [450, 400]
+    },
+    {
+      "parameters": {
+        "command": "cd /path/to/ExcuseMyFrench && python3 scripts/fetch_trends.py --region united_states"
+      },
+      "id": "fetch-trends",
+      "name": "1. Fetch Trending Topics",
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [650, 400],
+      "alwaysOutputData": true,
+      "continueOnFail": false,
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{ $json.exitCode }}",
+              "operation": "equals",
+              "value2": "0"
+            }
+          ]
+        }
+      },
+      "id": "check-trends-success",
+      "name": "Check Trends Success",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [850, 400]
+    },
+    {
+      "parameters": {
+        "command": "cd /path/to/ExcuseMyFrench && python3 scripts/generate_script.py --days 7 --topic-limit 5"
+      },
+      "id": "generate-script",
+      "name": "2. Generate Script",
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [1050, 300],
+      "alwaysOutputData": true,
+      "continueOnFail": false,
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{ $json.exitCode }}",
+              "operation": "equals",
+              "value2": "0"
+            }
+          ]
+        }
+      },
+      "id": "check-script-success",
+      "name": "Check Script Success",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [1250, 300]
+    },
+    {
+      "parameters": {
+        "command": "cd /path/to/ExcuseMyFrench && SCRIPT_FILE=$(ls -t data/scripts/episode_*.json | head -1) && python3 scripts/generate_audio.py \"$SCRIPT_FILE\""
+      },
+      "id": "generate-audio",
+      "name": "3. Generate Audio",
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [1450, 200],
+      "alwaysOutputData": true,
+      "continueOnFail": false,
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 10000
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{ $json.exitCode }}",
+              "operation": "equals",
+              "value2": "0"
+            }
+          ]
+        }
+      },
+      "id": "check-audio-success",
+      "name": "Check Audio Success",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [1650, 200]
+    },
+    {
+      "parameters": {
+        "command": "cd /path/to/ExcuseMyFrench && SCRIPT_FILE=$(ls -t data/scripts/episode_*.json | head -1) && python3 scripts/select_images.py \"$SCRIPT_FILE\" --output data/image_selections_latest.json"
+      },
+      "id": "select-images",
+      "name": "4. Select Images",
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [1850, 100],
+      "alwaysOutputData": true,
+      "continueOnFail": false,
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{ $json.exitCode }}",
+              "operation": "equals",
+              "value2": "0"
+            }
+          ]
+        }
+      },
+      "id": "check-images-success",
+      "name": "Check Images Success",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [2050, 100]
+    },
+    {
+      "parameters": {
+        "command": "cd /path/to/ExcuseMyFrench && TIMELINE=$(ls -t data/audio/*/timeline.json | head -1) && python3 scripts/assemble_video.py --timeline \"$TIMELINE\" --images data/image_selections_latest.json"
+      },
+      "id": "assemble-video",
+      "name": "5. Assemble Video",
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [2250, 0],
+      "alwaysOutputData": true,
+      "continueOnFail": false,
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 10000
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{ $json.exitCode }}",
+              "operation": "equals",
+              "value2": "0"
+            }
+          ]
+        }
+      },
+      "id": "check-video-success",
+      "name": "Check Video Success",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [2450, 0]
+    },
+    {
+      "parameters": {
+        "command": "cd /path/to/ExcuseMyFrench && VIDEO_FILE=$(ls -t data/final_videos/*.mp4 | head -1) && python3 scripts/post_instagram.py \"$VIDEO_FILE\""
+      },
+      "id": "post-instagram",
+      "name": "6. Post to Instagram",
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [2650, -100],
+      "alwaysOutputData": true,
+      "continueOnFail": true,
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 15000
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{ $json.exitCode }}",
+              "operation": "equals",
+              "value2": "0"
+            }
+          ]
+        }
+      },
+      "id": "check-post-success",
+      "name": "Check Post Success",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [2850, -100]
+    },
+    {
+      "parameters": {
+        "authentication": "none",
+        "requestMethod": "POST",
+        "url": "={{ $env.NOTIFICATION_WEBHOOK }}",
+        "options": {
+          "bodyContentType": "json"
+        },
+        "bodyParametersJson": "={\n  \"text\": \"✅ ExcuseMyFrench Pipeline Success\",\n  \"blocks\": [\n    {\n      \"type\": \"header\",\n      \"text\": {\n        \"type\": \"plain_text\",\n        \"text\": \"Pipeline Completed Successfully\"\n      }\n    },\n    {\n      \"type\": \"section\",\n      \"fields\": [\n        {\n          \"type\": \"mrkdwn\",\n          \"text\": \"*Pipeline ID:*\\n{{ $('Initialize Pipeline').item.json.pipeline_id }}\"\n        },\n        {\n          \"type\": \"mrkdwn\",\n          \"text\": \"*Status:*\\nSuccess\"\n        },\n        {\n          \"type\": \"mrkdwn\",\n          \"text\": \"*Timestamp:*\\n{{ $now.toISO() }}\"\n        }\n      ]\n    }\n  ]\n}"
+      },
+      "id": "notify-success",
+      "name": "Notify Success",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [3050, -200]
+    },
+    {
+      "parameters": {
+        "authentication": "none",
+        "requestMethod": "POST",
+        "url": "={{ $env.NOTIFICATION_WEBHOOK }}",
+        "options": {
+          "bodyContentType": "json"
+        },
+        "bodyParametersJson": "={\n  \"text\": \"❌ ExcuseMyFrench Pipeline Failed\",\n  \"blocks\": [\n    {\n      \"type\": \"header\",\n      \"text\": {\n        \"type\": \"plain_text\",\n        \"text\": \"Pipeline Failed\"\n      }\n    },\n    {\n      \"type\": \"section\",\n      \"fields\": [\n        {\n          \"type\": \"mrkdwn\",\n          \"text\": \"*Pipeline ID:*\\n{{ $('Initialize Pipeline').item.json.pipeline_id }}\"\n        },\n        {\n          \"type\": \"mrkdwn\",\n          \"text\": \"*Failed Step:*\\n{{ $node.name }}\"\n        },\n        {\n          \"type\": \"mrkdwn\",\n          \"text\": \"*Error:*\\n{{ $json.stderr || 'Unknown error' }}\"\n        },\n        {\n          \"type\": \"mrkdwn\",\n          \"text\": \"*Timestamp:*\\n{{ $now.toISO() }}\"\n        }\n      ]\n    }\n  ]\n}"
+      },
+      "id": "notify-failure",
+      "name": "Notify Failure",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [1050, 600]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={\n  \"status\": \"success\",\n  \"pipeline_id\": \"{{ $('Initialize Pipeline').item.json.pipeline_id }}\",\n  \"message\": \"Video generation pipeline completed successfully\"\n}"
+      },
+      "id": "webhook-response-success",
+      "name": "Webhook Response - Success",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [3050, -100]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseCode": 500,
+        "responseBody": "={\n  \"status\": \"error\",\n  \"pipeline_id\": \"{{ $('Initialize Pipeline').item.json.pipeline_id }}\",\n  \"message\": \"Pipeline failed at step: {{ $node.name }}\",\n  \"error\": \"{{ $json.stderr || 'Unknown error' }}\"\n}"
+      },
+      "id": "webhook-response-failure",
+      "name": "Webhook Response - Failure",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [1250, 700]
+    }
+  ],
+  "connections": {
+    "Schedule Trigger": {
+      "main": [
+        [
+          {
+            "node": "Initialize Pipeline",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Webhook Trigger": {
+      "main": [
+        [
+          {
+            "node": "Initialize Pipeline",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Initialize Pipeline": {
+      "main": [
+        [
+          {
+            "node": "1. Fetch Trending Topics",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "1. Fetch Trending Topics": {
+      "main": [
+        [
+          {
+            "node": "Check Trends Success",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Trends Success": {
+      "main": [
+        [
+          {
+            "node": "2. Generate Script",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Notify Failure",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "2. Generate Script": {
+      "main": [
+        [
+          {
+            "node": "Check Script Success",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Script Success": {
+      "main": [
+        [
+          {
+            "node": "3. Generate Audio",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Notify Failure",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "3. Generate Audio": {
+      "main": [
+        [
+          {
+            "node": "Check Audio Success",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Audio Success": {
+      "main": [
+        [
+          {
+            "node": "4. Select Images",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Notify Failure",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "4. Select Images": {
+      "main": [
+        [
+          {
+            "node": "Check Images Success",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Images Success": {
+      "main": [
+        [
+          {
+            "node": "5. Assemble Video",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Notify Failure",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "5. Assemble Video": {
+      "main": [
+        [
+          {
+            "node": "Check Video Success",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Video Success": {
+      "main": [
+        [
+          {
+            "node": "6. Post to Instagram",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Notify Failure",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "6. Post to Instagram": {
+      "main": [
+        [
+          {
+            "node": "Check Post Success",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Post Success": {
+      "main": [
+        [
+          {
+            "node": "Notify Success",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Webhook Response - Success",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Notify Failure",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Notify Failure": {
+      "main": [
+        [
+          {
+            "node": "Webhook Response - Failure",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "1.0.0",
+  "id": "excusemyfrench-main-pipeline",
+  "meta": {
+    "instanceId": "excusemyfrench"
+  },
+  "tags": [
+    {
+      "name": "production",
+      "id": "1"
+    },
+    {
+      "name": "video-generation",
+      "id": "2"
+    }
+  ]
+}

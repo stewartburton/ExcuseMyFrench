@@ -1,0 +1,55 @@
+# Git
+.git
+.gitignore
+
+# Python
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.so
+*.egg
+*.egg-info
+dist
+build
+.venv
+venv
+excusemyfrench/
+
+# IDE
+.vscode
+.idea
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Data (mount as volumes instead)
+data/*
+!data/.gitkeep
+models/*
+!models/.gitkeep
+
+# Logs
+*.log
+
+# Environment
+config/.env
+
+# Documentation
+docs/
+*.md
+!README.md
+
+# CI/CD
+.github/
+
+# Other
+*.png
+*.jpg
+*.jpeg
+flowchart.png
