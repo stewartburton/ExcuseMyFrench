@@ -179,66 +179,32 @@ This document tracks all remaining tasks to complete the ExcuseMyFrench project.
 
 ### Animation Pipeline
 
-- [ ] **Download Wav2Lip Checkpoints**
+- [X] **Download Wav2Lip Checkpoints** ✅
   - **Priority:** MEDIUM
   - **Estimated Time:** 10 minutes
-  - **Size:** ~500MB
-  - **Action:**
-    ```bash
-    # Create directory
-    mkdir -p models/wav2lip
-
-    # Download checkpoint files
-    # Main model checkpoint
-    wget https://github.com/Rudrabha/Wav2Lip/releases/download/v1.0/wav2lip.pth -O models/wav2lip/wav2lip.pth
-
-    # OR use wget alternative for Windows:
-    # Invoke-WebRequest -Uri "https://github.com/Rudrabha/Wav2Lip/releases/download/v1.0/wav2lip.pth" -OutFile "models/wav2lip/wav2lip.pth"
-
-    # GAN checkpoint (optional, higher quality)
-    wget https://github.com/Rudrabha/Wav2Lip/releases/download/v1.0/wav2lip_gan.pth -O models/wav2lip/wav2lip_gan.pth
-
-    # Face detection model (required)
-    wget https://www.adrianbulat.com/downloads/python-fan/s3fd-619a316812.pth -O models/wav2lip/s3fd.pth
-    ```
-  - **Verify:** `ls -lh models/wav2lip/` should show 3 .pth files
-  - **Note:** Faster than SadTalker, good for initial testing
-  - **Links:**
-    - Main repo: https://github.com/Rudrabha/Wav2Lip
-    - Model releases: https://github.com/Rudrabha/Wav2Lip/releases/tag/v1.0
+  - **Size:** ~366MB
+  - **Status:** COMPLETED
+  - **Files Downloaded:**
+    - ✅ s3fd.pth (86MB) - Face detection
+    - ✅ Wav2Lip-SD-GAN.pt (140MB) - High quality lip-sync
+    - ✅ Wav2Lip-SD-NOGAN.pt (140MB) - Faster lip-sync
+  - **Location:** `models/wav2lip/`
+  - **Note:** Downloaded SD (Stable Diffusion enhanced) versions, not older `wav2lip*.pth` versions
+  - **Full Instructions:** `docs/MODEL_DOWNLOADS.md`
 
 - [ ] **Download SadTalker Checkpoints**
   - **Priority:** MEDIUM
   - **Estimated Time:** 15 minutes
   - **Size:** ~2GB
-  - **Action:**
-    ```bash
-    # Create directories
-    mkdir -p models/sadtalker/checkpoints
-    mkdir -p models/sadtalker/gfpgan/weights
-
-    # Download main checkpoints
-    cd models/sadtalker/checkpoints
-
-    # Download from HuggingFace (recommended)
-    wget https://huggingface.co/vinthony/SadTalker/resolve/main/checkpoints/mapping_00109-model.pth.tar
-    wget https://huggingface.co/vinthony/SadTalker/resolve/main/checkpoints/mapping_00229-model.pth.tar
-    wget https://huggingface.co/vinthony/SadTalker/resolve/main/checkpoints/SadTalker_V0.0.2_256.safetensors
-    wget https://huggingface.co/vinthony/SadTalker/resolve/main/checkpoints/SadTalker_V0.0.2_512.safetensors
-
-    # Download GFPGAN (face enhancement)
-    cd ../gfpgan/weights
-    wget https://github.com/xinntao/facexlib/releases/download/v0.1.0/alignment_WFLW_4HG.pth
-    wget https://github.com/xinntao/facexlib/releases/download/v0.2.2/headpose_hopenet.pth
-    wget https://github.com/TencentARC/GFPGAN/releases/download/v1.3.0/GFPGANv1.4.pth
-
-    cd ../../..
-    ```
-  - **Verify:** Check files exist in `models/sadtalker/checkpoints/` and `models/sadtalker/gfpgan/weights/`
+  - **Action:** See detailed guide in `docs/MODEL_DOWNLOADS.md` - SadTalker section
+  - **Quick Start:**
+    1. Visit https://huggingface.co/vinthony/SadTalker/tree/main/checkpoints
+    2. Download 4 checkpoint files via web interface
+    3. Visit GitHub releases for GFPGAN weights (3 files)
+    4. Save to `models/sadtalker/checkpoints/` and `models/sadtalker/gfpgan/weights/`
+  - **Verify:** 4 files in checkpoints/, 3 files in gfpgan/weights/
   - **Note:** Better quality than Wav2Lip, but slower
-  - **Links:**
-    - Main repo: https://github.com/OpenTalker/SadTalker
-    - HuggingFace models: https://huggingface.co/vinthony/SadTalker
+  - **Full Instructions:** `docs/MODEL_DOWNLOADS.md`
 
 - [ ] **Test Animation Pipeline**
   - **Priority:** MEDIUM
@@ -349,35 +315,13 @@ This document tracks all remaining tasks to complete the ExcuseMyFrench project.
   - **Size:**
     - 5B model: ~10GB (Recommended for RTX 4070 with 12GB VRAM)
     - 14B model: ~28GB (Requires 24GB+ VRAM like RTX 4090)
-  - **Action:**
-    ```bash
-    # Create directory
-    mkdir -p models/wan2.2
-
-    # Option 1: Download via HuggingFace (if available)
-    # Check https://huggingface.co/models?search=wan for official models
-    huggingface-cli download <model-name> --local-dir models/wan2.2/
-
-    # Option 2: Clone from official repository (if available)
-    # git clone <wan-2.2-repo> models/wan2.2/
-
-    # Option 3: Manual download
-    # Visit the official Wan 2.2 release page
-    # Download model files and place in models/wan2.2/
-    ```
-  - **Verify:**
-    ```bash
-    python scripts/verify_models.py --verify
-    # OR manually check:
-    ls -lh models/wan2.2/
-    # Should show model checkpoint files (~10GB or ~28GB)
-    ```
-  - **Note:** Only needed for AI-generated dynamic video (not required for static image videos)
-  - **Important:** As of October 2025, Wan 2.2 may still be in development. Check official sources:
-    - Research papers on arXiv
-    - GitHub repositories
-    - HuggingFace model hub
-  - **Alternative:** Start with static images + animation (Wav2Lip/SadTalker) instead
+  - **Action:** See detailed guide in `docs/MODEL_DOWNLOADS.md` - Wan 2.2 section
+  - **Important Notes:**
+    - As of October 2025, Wan 2.2 may still be in development
+    - Check official sources (HuggingFace, GitHub, arXiv) for availability
+    - NOT required for v1.0 - use Stable Diffusion + Wav2Lip/SadTalker instead
+  - **Alternative:** Start with static images + animation (recommended)
+  - **Full Instructions:** `docs/MODEL_DOWNLOADS.md`
 
 ---
 
