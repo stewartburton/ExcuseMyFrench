@@ -13,6 +13,7 @@ import logging
 import os
 import subprocess
 import sys
+from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
@@ -447,16 +448,22 @@ class AnimationGenerator:
         timeline_path: str,
         image_selections_path: str,
         output_dir: str = "data/animated",
-        episode_name: Optional[str] = None
+        episode_name: Optional[str] = None,
+        resume: bool = True
     ) -> Tuple[List[str], Dict]:
         """
         Process entire timeline and generate animated videos for each line.
+
+        Supports checkpoint/resume functionality for batch processing recovery.
+        Progress is saved after each successful animation to allow resuming
+        from the last successful point in case of errors.
 
         Args:
             timeline_path: Path to timeline JSON (from generate_audio.py)
             image_selections_path: Path to image selections JSON (from select_images.py)
             output_dir: Directory to save animated videos
             episode_name: Name for this episode (used in output paths)
+            resume: If True, resume from last checkpoint; if False, start fresh
 
         Returns:
             Tuple of (list of animated video paths, updated timeline dictionary)
@@ -516,6 +523,9 @@ class AnimationGenerator:
         output_path = Path(output_dir) / episode_name
         output_path.mkdir(parents=True, exist_ok=True)
 
+        # Checkpoint file for resume functionality
+        checkpoint_file = output_path / ".animation_checkpoint.json"
+
         logger.info(f"Processing timeline for episode: {episode_name}")
         logger.info(f"Lines to animate: {len(timeline['lines'])}")
 
@@ -524,17 +534,51 @@ class AnimationGenerator:
         for sel in selections['selections']:
             image_map[sel['line_index']] = sel['image_path']
 
-        # Process each line
+        # Initialize or load checkpoint
         animated_videos = []
         updated_timeline = {
             'episode': episode_name,
             'total_duration': timeline.get('total_duration', 0.0),
             'lines': []
         }
+        processed_indices = set()
 
-        for i, line in enumerate(timeline['lines'], 1):
+        if resume and checkpoint_file.exists():
+            # Load existing progress
+            logger.info(f"Resuming from checkpoint: {checkpoint_file}")
             try:
-                line_index = line['index']
+                with open(checkpoint_file, 'r', encoding='utf-8') as f:
+                    checkpoint_data = json.load(f)
+
+                updated_timeline = checkpoint_data.get('timeline', updated_timeline)
+                processed_indices = set(checkpoint_data.get('processed_indices', []))
+
+                # Collect existing animated videos
+                for line in updated_timeline['lines']:
+                    if line.get('animated_video'):
+                        animated_videos.append(line['animated_video'])
+
+                logger.info(f"Resuming: {len(processed_indices)} lines already processed")
+            except Exception as e:
+                logger.warning(f"Failed to load checkpoint, starting fresh: {e}")
+                processed_indices = set()
+        else:
+            if not resume:
+                logger.info("Resume disabled, starting fresh")
+            # Clean start - remove checkpoint if it exists
+            if checkpoint_file.exists():
+                checkpoint_file.unlink()
+
+        # Process each line
+        for i, line in enumerate(timeline['lines'], 1):
+            line_index = line['index']
+
+            # Skip if already processed (for resume)
+            if line_index in processed_indices:
+                logger.info(f"[{i}/{len(timeline['lines'])}] Line {line_index} already processed, skipping")
+                continue
+
+            try:
                 character = line['character']
                 audio_file = line['audio_file']
 
@@ -567,19 +611,64 @@ class AnimationGenerator:
                 updated_line['animated_video'] = animated_path
                 updated_timeline['lines'].append(updated_line)
 
+                # Mark as processed
+                processed_indices.add(line_index)
+
+                # Save checkpoint after each successful animation
+                self._save_checkpoint(checkpoint_file, updated_timeline, processed_indices)
+                logger.debug(f"Checkpoint saved after line {line_index}")
+
             except Exception as e:
                 logger.error(f"Failed to animate line {i}: {e}")
-                # Continue with next line rather than failing completely
-                # Add line without animated video
+                # Add line without animated video but continue processing
                 updated_line = line.copy()
                 updated_line['animated_video'] = None
                 updated_line['animation_error'] = str(e)
                 updated_timeline['lines'].append(updated_line)
+
+                # Mark as processed (even though it failed) to avoid retry loops
+                processed_indices.add(line_index)
+
+                # Save checkpoint to track the error
+                self._save_checkpoint(checkpoint_file, updated_timeline, processed_indices)
                 continue
 
         logger.info(f"Successfully animated {len(animated_videos)} out of {len(timeline['lines'])} lines")
 
+        # Remove checkpoint file on successful completion
+        if checkpoint_file.exists():
+            checkpoint_file.unlink()
+            logger.info("Processing complete, checkpoint removed")
+
         return animated_videos, updated_timeline
+
+    def _save_checkpoint(self, checkpoint_file: Path, timeline: Dict, processed_indices: set):
+        """
+        Save checkpoint data for resume functionality.
+
+        Args:
+            checkpoint_file: Path to checkpoint file
+            timeline: Current timeline state
+            processed_indices: Set of processed line indices
+        """
+        try:
+            checkpoint_data = {
+                'timeline': timeline,
+                'processed_indices': list(processed_indices),
+                'last_updated': datetime.now().isoformat()
+            }
+
+            # Write atomically using a temporary file
+            temp_file = checkpoint_file.with_suffix('.tmp')
+            with open(temp_file, 'w', encoding='utf-8') as f:
+                json.dump(checkpoint_data, f, indent=2, ensure_ascii=False)
+
+            # Atomic rename
+            temp_file.replace(checkpoint_file)
+
+        except Exception as e:
+            logger.error(f"Failed to save checkpoint: {e}")
+            # Don't raise - checkpointing failure shouldn't stop processing
 
     def save_timeline(self, timeline: Dict, output_dir: str = "data/animated") -> str:
         """
@@ -701,6 +790,12 @@ Configuration:
     )
 
     parser.add_argument(
+        "--no-resume",
+        action="store_true",
+        help="Disable resume from checkpoint (start fresh)"
+    )
+
+    parser.add_argument(
         "--verbose",
         action="store_true",
         help="Enable verbose logging"
@@ -761,7 +856,8 @@ Configuration:
                 timeline_path=args.timeline,
                 image_selections_path=args.images,
                 output_dir=args.output_dir,
-                episode_name=args.episode_name
+                episode_name=args.episode_name,
+                resume=not args.no_resume
             )
 
             # Save updated timeline
