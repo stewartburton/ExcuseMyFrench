@@ -12,8 +12,9 @@ import logging
 import os
 import sys
 import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
-from typing import List, Dict, Tuple
+from typing import List, Dict, Tuple, Optional
 
 from dotenv import load_dotenv
 
@@ -199,11 +200,80 @@ class AudioGenerator:
             logger.error(f"Error reading audio file {filepath}: {e}")
             return 0.0
 
+    def _generate_single_audio(
+        self,
+        line_data: Tuple[int, Dict[str, str], Path]
+    ) -> Optional[Dict]:
+        """
+        Generate audio for a single line (used by parallel processing).
+
+        Args:
+            line_data: Tuple of (index, line_dict, output_path)
+
+        Returns:
+            Dictionary with line info and audio file path, or None if failed
+        """
+        i, line, output_path = line_data
+        character = line['character']
+        text = line['line']
+        emotion = line.get('emotion', 'neutral')
+
+        # Generate filename
+        filename = f"{i:03d}_{character.lower()}_{emotion}.mp3"
+        filepath = output_path / filename
+
+        try:
+            logger.info(f"[{i}] Generating audio for {character}...")
+
+            max_retries = 3
+            base_delay = 2.0
+            audio_bytes = None
+
+            for retry in range(max_retries):
+                try:
+                    audio_bytes = self.generate_audio(text, character, emotion)
+                    break  # Success, exit retry loop
+                except Exception as e:
+                    # Check if it's a rate limit error
+                    error_str = str(e).lower()
+                    is_rate_limit = any(phrase in error_str for phrase in ['rate limit', 'too many requests', '429'])
+
+                    if is_rate_limit and retry < max_retries - 1:
+                        wait_time = (2 ** retry) * base_delay
+                        logger.warning(f"Rate limit hit for line {i}, retrying in {wait_time:.1f}s (attempt {retry + 1}/{max_retries})...")
+                        time.sleep(wait_time)
+                    else:
+                        # Not a rate limit error or final retry, re-raise
+                        raise
+
+            if audio_bytes is None:
+                raise Exception("Failed to generate audio after retries")
+
+            self.save_audio(audio_bytes, filepath)
+
+            # Get duration
+            duration = self.get_audio_duration(filepath)
+
+            return {
+                'index': i,
+                'character': character,
+                'text': text,
+                'emotion': emotion,
+                'audio_file': str(filepath),
+                'duration': duration
+            }
+
+        except Exception as e:
+            logger.error(f"Failed to generate audio for line {i}: {e}")
+            return None
+
     def process_script(
         self,
         script: List[Dict[str, str]],
         output_dir: str = "data/audio",
-        episode_name: str = None
+        episode_name: str = None,
+        parallel: bool = False,
+        max_workers: int = None
     ) -> Tuple[List[str], Dict]:
         """
         Process an entire script and generate audio files.
@@ -212,6 +282,8 @@ class AudioGenerator:
             script: List of dialogue line dictionaries
             output_dir: Directory to save audio files
             episode_name: Name for this episode (used in filenames)
+            parallel: Enable parallel processing
+            max_workers: Number of parallel workers (default from env)
 
         Returns:
             Tuple of (list of audio file paths, timeline dictionary)
@@ -223,6 +295,18 @@ class AudioGenerator:
         output_path = Path(output_dir) / episode_name
         output_path.mkdir(parents=True, exist_ok=True)
 
+        if parallel:
+            return self._process_script_parallel(script, output_path, episode_name, max_workers)
+        else:
+            return self._process_script_sequential(script, output_path, episode_name)
+
+    def _process_script_sequential(
+        self,
+        script: List[Dict[str, str]],
+        output_path: Path,
+        episode_name: str
+    ) -> Tuple[List[str], Dict]:
+        """Process script sequentially (original behavior)."""
         audio_files = []
         timeline = {
             'episode': episode_name,
@@ -302,6 +386,78 @@ class AudioGenerator:
 
         timeline['total_duration'] = current_time
         logger.info(f"Generated {len(audio_files)} audio files")
+        logger.info(f"Total duration: {current_time:.2f} seconds")
+
+        return audio_files, timeline
+
+    def _process_script_parallel(
+        self,
+        script: List[Dict[str, str]],
+        output_path: Path,
+        episode_name: str,
+        max_workers: int = None
+    ) -> Tuple[List[str], Dict]:
+        """Process script with parallel audio generation."""
+        if max_workers is None:
+            max_workers = int(os.getenv("PARALLEL_AUDIO_WORKERS", "3"))
+
+        logger.info(f"Using parallel processing with {max_workers} workers")
+
+        # Prepare work items
+        work_items = [
+            (i, line, output_path)
+            for i, line in enumerate(script, 1)
+        ]
+
+        # Process in parallel
+        results = []
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            # Submit all tasks
+            future_to_index = {
+                executor.submit(self._generate_single_audio, item): item[0]
+                for item in work_items
+            }
+
+            # Collect results as they complete
+            for future in as_completed(future_to_index):
+                index = future_to_index[future]
+                try:
+                    result = future.result()
+                    if result:
+                        results.append(result)
+                        logger.info(f"Completed line {index}/{len(script)}")
+                except Exception as e:
+                    logger.error(f"Exception processing line {index}: {e}")
+
+        # Sort results by index
+        results.sort(key=lambda x: x['index'])
+
+        # Build timeline
+        timeline = {
+            'episode': episode_name,
+            'total_duration': 0.0,
+            'lines': []
+        }
+
+        audio_files = []
+        current_time = 0.0
+
+        for result in results:
+            audio_files.append(result['audio_file'])
+            timeline['lines'].append({
+                'index': result['index'],
+                'character': result['character'],
+                'text': result['text'],
+                'emotion': result['emotion'],
+                'audio_file': result['audio_file'],
+                'start_time': current_time,
+                'duration': result['duration'],
+                'end_time': current_time + result['duration']
+            })
+            current_time += result['duration']
+
+        timeline['total_duration'] = current_time
+        logger.info(f"Generated {len(audio_files)} audio files (parallel)")
         logger.info(f"Total duration: {current_time:.2f} seconds")
 
         return audio_files, timeline
@@ -397,6 +553,18 @@ Examples:
         help="Enable verbose logging"
     )
 
+    parser.add_argument(
+        "--parallel",
+        action="store_true",
+        help="Enable parallel audio generation"
+    )
+
+    parser.add_argument(
+        "--workers",
+        type=int,
+        help="Number of parallel workers (default: from PARALLEL_AUDIO_WORKERS env var)"
+    )
+
     args = parser.parse_args()
 
     if args.verbose:
@@ -428,7 +596,9 @@ Examples:
         audio_files, timeline = generator.process_script(
             script,
             output_dir=args.output_dir,
-            episode_name=episode_name
+            episode_name=episode_name,
+            parallel=args.parallel,
+            max_workers=args.workers
         )
 
         # Save timeline

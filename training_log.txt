@@ -1,0 +1,18 @@
+C:\Users\stewa\AppData\Roaming\Python\Python311\site-packages\accelerate\accelerator.py:530: UserWarning: `log_with=tensorboard` was passed but no supported trackers are currently installed.
+  warnings.warn(f"`log_with={log_with}` was passed but no supported trackers are currently installed.")
+2025-10-07 08:57:27,295 - __main__ - INFO - DreamBooth trainer initialized
+2025-10-07 08:57:27,295 - __main__ - INFO - Starting training
+2025-10-07 08:57:27,295 - __main__ - INFO - Loading models from runwayml/stable-diffusion-v1-5
+Traceback (most recent call last):
+  File "D:\ExcuseMyFrench\Repo\ExcuseMyFrench\scripts\train_dreambooth.py", line 789, in <module>
+    main()
+  File "D:\ExcuseMyFrench\Repo\ExcuseMyFrench\scripts\train_dreambooth.py", line 785, in main
+    trainer.train()
+  File "D:\ExcuseMyFrench\Repo\ExcuseMyFrench\scripts\train_dreambooth.py", line 446, in train
+    self.load_models()
+  File "D:\ExcuseMyFrench\Repo\ExcuseMyFrench\scripts\train_dreambooth.py", line 295, in load_models
+    self.tokenizer = CLIPTokenizer.from_pretrained(
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\stewa\AppData\Roaming\Python\Python311\site-packages\transformers\tokenization_utils_base.py", line 2200, in from_pretrained
+    raise EnvironmentError(
+OSError: Can't load tokenizer for 'runwayml/stable-diffusion-v1-5'. If you were trying to load it from 'https://huggingface.co/models', make sure you don't have a local directory with the same name. Otherwise, make sure 'runwayml/stable-diffusion-v1-5' is the correct path to a directory containing all relevant files for a CLIPTokenizer tokenizer.

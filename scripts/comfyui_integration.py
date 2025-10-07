@@ -24,6 +24,11 @@ from dotenv import load_dotenv
 env_path = Path(__file__).parent.parent / "config" / ".env"
 load_dotenv(env_path)
 
+# Import image cache
+import sys
+sys.path.insert(0, str(Path(__file__).parent))
+from utils.image_cache import ImageCache
+
 # Configure logging
 logging.basicConfig(
     level=logging.INFO,
@@ -54,7 +59,8 @@ class ComfyUIClient:
         self,
         server_url: Optional[str] = None,
         timeout: int = 300,
-        max_retries: int = 3
+        max_retries: int = 3,
+        use_cache: bool = None
     ):
         """
         Initialize ComfyUI client.
@@ -63,6 +69,7 @@ class ComfyUIClient:
             server_url: ComfyUI server URL (uses env var if None)
             timeout: Request timeout in seconds
             max_retries: Maximum number of retry attempts
+            use_cache: Enable image caching (None = use env var)
         """
         if server_url:
             self.server_url = server_url.rstrip('/')
@@ -76,9 +83,17 @@ class ComfyUIClient:
         self.max_retries = max_retries
         self.client_id = str(uuid.uuid4())
 
+        # Initialize cache
+        if use_cache is None:
+            use_cache = os.getenv("COMFYUI_CACHE_ENABLED", "true").lower() == "true"
+
+        self.cache = ImageCache() if use_cache else None
+
         logger.info(f"ComfyUI client initialized")
         logger.info(f"Server URL: {self.server_url}")
         logger.info(f"Client ID: {self.client_id}")
+        if self.cache:
+            logger.info(f"Image caching enabled")
 
     def _request(
         self,
@@ -437,7 +452,8 @@ class ComfyUIClient:
         workflow_path: str,
         params: Dict[str, Any],
         output_path: Optional[str] = None,
-        timeout: Optional[int] = None
+        timeout: Optional[int] = None,
+        use_cache: bool = True
     ) -> List[Image.Image]:
         """
         Generate images using a workflow.
@@ -447,6 +463,7 @@ class ComfyUIClient:
             params: Parameters to update in workflow
             output_path: Directory to save images (optional)
             timeout: Maximum wait time in seconds
+            use_cache: Check cache before generating (default: True)
 
         Returns:
             List of generated PIL Images
@@ -454,6 +471,29 @@ class ComfyUIClient:
         Raises:
             ComfyUIError: If generation fails
         """
+        # Create cache key from params and workflow
+        cache_params = {
+            'workflow': workflow_path,
+            'params': params
+        }
+
+        # Try to get from cache first
+        if use_cache and self.cache:
+            cached_image = self.cache.get(cache_params)
+            if cached_image:
+                logger.info("Using cached image")
+                images = [cached_image]
+
+                # Save to output path if requested
+                if output_path:
+                    cached_image.save(output_path)
+                    logger.info(f"Saved cached image to {output_path}")
+
+                return images
+
+        # Not in cache, generate new image
+        logger.info("Generating new image (cache miss or disabled)")
+
         # Load workflow
         workflow = self.load_workflow(workflow_path)
 
@@ -485,6 +525,10 @@ class ComfyUIClient:
 
             image = self.download_image(img_info, save_path)
             images.append(image)
+
+        # Cache the first image (if caching enabled)
+        if use_cache and self.cache and images:
+            self.cache.put(cache_params, images[0])
 
         logger.info(f"Generated {len(images)} images")
         return images
