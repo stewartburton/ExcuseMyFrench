@@ -496,6 +496,8 @@ class DreamBoothTrainer:
             self.unet, optimizer, train_dataloader, lr_scheduler = self.accelerator.prepare(
                 self.unet, optimizer, train_dataloader, lr_scheduler
             )
+            # Move text encoder to device even if not training it
+            self.text_encoder.to(self.accelerator.device)
 
         # Move VAE to device
         self.vae.to(self.accelerator.device)
@@ -543,7 +545,7 @@ class DreamBoothTrainer:
                     noisy_latents = self.noise_scheduler.add_noise(latents, noise, timesteps)
 
                     # Get text embeddings
-                    encoder_hidden_states = self.text_encoder(batch["instance_prompt_ids"])[0]
+                    encoder_hidden_states = self.text_encoder(batch["instance_prompt_ids"].to(self.accelerator.device))[0]
 
                     # Predict noise
                     model_pred = self.unet(noisy_latents, timesteps, encoder_hidden_states).sample
@@ -564,7 +566,7 @@ class DreamBoothTrainer:
                         noisy_class_latents = self.noise_scheduler.add_noise(class_latents, class_noise, timesteps)
 
                         # Get class text embeddings
-                        class_encoder_hidden_states = self.text_encoder(batch["class_prompt_ids"])[0]
+                        class_encoder_hidden_states = self.text_encoder(batch["class_prompt_ids"].to(self.accelerator.device))[0]
 
                         # Predict noise
                         class_model_pred = self.unet(noisy_class_latents, timesteps, class_encoder_hidden_states).sample

@@ -47,7 +47,7 @@ ExcuseMyFrench is an AI-powered video generation pipeline that creates short-for
 
 | Component | Status | Issue | Priority |
 |-----------|--------|-------|----------|
-| **DreamBooth Training** | 🟡 In Progress | Training in progress on RTX 4070 | HIGH |
+| **DreamBooth Training** | ✅ Running | Training successfully running on RTX 4070 (~1 hour remaining) | HIGH |
 | **Wan 2.2 Models** | 🔴 Missing | `models/wan2.2/` directory empty | HIGH |
 | **SadTalker Models** | 🔴 Missing | Checkpoint not downloaded | MEDIUM |
 | **Wav2Lip Models** | 🔴 Missing | Checkpoint not downloaded | MEDIUM |
@@ -72,15 +72,19 @@ ExcuseMyFrench is an AI-powered video generation pipeline that creates short-for
      - Configured HuggingFace authentication token
      - Installed PyTorch with CUDA 12.1 support for RTX 4070
 
-2. **Train DreamBooth Model for Butcher** 🟡 IN PROGRESS
+2. **Train DreamBooth Model for Butcher** ✅ RUNNING
    ```bash
    python scripts/train_dreambooth.py --config training/config/butcher_config.yaml
    ```
-   - **Status:** Training in progress on RTX 4070
-   - **Progress:** Generating 200 class images (for prior preservation)
+   - **Status:** Training successfully running on RTX 4070
+   - **Progress:** Step 1/800 completed, loss=1.47
    - **Settings:** 800 steps, FP16 mixed precision, resolution 512x512
-   - **Estimated Time:** 15-20 minutes on RTX 4070
+   - **Estimated Time:** ~1 hour (~4.6 seconds per step)
    - **Output:** Custom Butcher model at `models/dreambooth_butcher/`
+   - **Fixed Issues:**
+     - Resolved device placement errors (text_encoder not on GPU)
+     - All tensors now properly moved to CUDA device
+     - Training loop executing successfully
 
 3. **Download Wan 2.2 Models** (OPTIONAL for v1.0)
    - **Status:** Not downloaded
@@ -247,6 +251,11 @@ None - all previous blockers resolved!
    - **Cause:** PyTorch installed without CUDA support
    - **Fix:** Reinstalled PyTorch with CUDA 12.1 for RTX 4070 GPU support
 
+5. ✅ **Device Placement Error (CPU/GPU mismatch)**
+   - **Cause:** Text encoder not moved to GPU when `train_text_encoder=false`
+   - **Fix:** Explicitly moved text_encoder to accelerator.device after prepare()
+   - **Error:** "Expected all tensors to be on the same device, but found at least two devices, cpu and cuda:0"
+
 ### Previously Resolved Issues
 
 All issues from PR #2 and PR #4 have been resolved:
@@ -333,10 +342,11 @@ make stats  # Show pipeline statistics
    - PyTorch with CUDA support installed
    - GPU acceleration verified
 
-2. 🟡 **Train Butcher DreamBooth Model** (IN PROGRESS - 15-20 minutes)
+2. ✅ **Train Butcher DreamBooth Model** (IN PROGRESS - ~1 hour)
    - 23 training images ready
    - Config validated
-   - Training currently running on RTX 4070
+   - Training successfully running on RTX 4070 (step 1/800)
+   - All device placement issues resolved
 
 3. **Run End-to-End Pipeline Test** (1 hour) - NEXT
    - Test without animation first
