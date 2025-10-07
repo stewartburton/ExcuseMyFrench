@@ -2,7 +2,7 @@
 
 **Last Updated:** October 7, 2025
 **Current Branch:** main
-**Latest Commit:** Merge pull request #4 from stewartburton/feature/animation-and-integrations
+**Latest Commit:** Add environment validation demo script (66ac808)
 
 ---
 
@@ -29,7 +29,9 @@ ExcuseMyFrench is an AI-powered video generation pipeline that creates short-for
 | **Input Validation** | ✅ Complete | Multiple scripts | Comprehensive validation across pipeline |
 | **Rate Limiting** | ✅ Complete | `scripts/post_instagram.py` | Proactive rate limit management |
 | **Security** | ✅ Complete | Multiple scripts | Path traversal protection, sanitization |
-| **Documentation** | ✅ Complete | `docs/` directory | 11 documentation files |
+| **Documentation** | ✅ Complete | `docs/` directory | 12 documentation files including TESTING.md |
+| **Environment Validation** | ✅ Complete | `scripts/demo.py` | Comprehensive validation without API keys |
+| **DreamBooth Training** | ✅ Complete | `scripts/train_dreambooth.py` | Checkpoint/resume functionality, RTX 4070 support |
 
 ### 🟡 Complete But Needs Testing
 
@@ -37,17 +39,15 @@ ExcuseMyFrench is an AI-powered video generation pipeline that creates short-for
 |-----------|--------|----------|-------|
 | **Animation Pipeline** | 🟡 Needs Testing | `scripts/animate.py` | SadTalker/Wav2Lip integration - models not downloaded |
 | **ComfyUI Integration** | 🟡 Needs Testing | `scripts/comfyui_integration.py` | Workflow automation - ComfyUI not installed |
-| **Character Image Gen** | 🟡 Needs Testing | `scripts/generate_character_image.py` | DreamBooth integration - model not trained |
+| **Character Image Gen** | 🟡 Needs Testing | `scripts/generate_character_image.py` | DreamBooth integration - model training ~50% complete |
 | **Instagram Posting** | 🟡 Needs Testing | `scripts/post_instagram.py` | Token refresh, caption sanitization - needs API credentials |
 | **Performance Optimizations** | 🟡 Needs Testing | Multiple scripts | Parallel processing, caching, batching implemented |
-| **Checkpoint/Resume** | 🟡 Needs Testing | `scripts/animate.py` | State tracking for batch operations |
 | **Caption Generation** | 🟡 Needs Testing | `scripts/generate_caption.py` | Instagram-optimized captions with hashtags |
 
 ### 🔴 Incomplete / Blocked
 
 | Component | Status | Issue | Priority |
 |-----------|--------|-------|----------|
-| **DreamBooth Training** | ✅ Running | Training successfully running on RTX 4070 (~1 hour remaining) | HIGH |
 | **Wan 2.2 Models** | 🔴 Missing | `models/wan2.2/` directory empty | HIGH |
 | **SadTalker Models** | 🔴 Missing | Checkpoint not downloaded | MEDIUM |
 | **Wav2Lip Models** | 🔴 Missing | Checkpoint not downloaded | MEDIUM |
@@ -72,19 +72,25 @@ ExcuseMyFrench is an AI-powered video generation pipeline that creates short-for
      - Configured HuggingFace authentication token
      - Installed PyTorch with CUDA 12.1 support for RTX 4070
 
-2. **Train DreamBooth Model for Butcher** ✅ RUNNING
+2. **Train DreamBooth Model for Butcher** ✅ IN PROGRESS (50% Complete)
    ```bash
    python scripts/train_dreambooth.py --config training/config/butcher_config.yaml
+   # Resume from checkpoint:
+   python scripts/train_dreambooth.py --config training/config/butcher_config.yaml --resume
    ```
-   - **Status:** Training successfully running on RTX 4070
-   - **Progress:** Step 1/800 completed, loss=1.47
+   - **Status:** Training in progress on RTX 4070
+   - **Progress:** Step 400/800 (50%), loss=0.0195 (down from 2.39)
    - **Settings:** 800 steps, FP16 mixed precision, resolution 512x512
-   - **Estimated Time:** ~1 hour (~4.6 seconds per step)
+   - **Estimated Time:** ~1.5 hours remaining (~13.4 seconds per step)
    - **Output:** Custom Butcher model at `models/dreambooth_butcher/`
+   - **Checkpoints:** Saved at steps 100, 200, 300, 400 (automatic every 100 steps)
+   - **Validation:** Images generated at each checkpoint successfully
    - **Fixed Issues:**
      - Resolved device placement errors (text_encoder not on GPU)
      - All tensors now properly moved to CUDA device
-     - Training loop executing successfully
+     - Fixed validation dtype errors (text_encoder, VAE)
+     - Implemented checkpoint/resume functionality
+     - Training loop executing successfully with excellent loss decrease
 
 3. **Download Wan 2.2 Models** (OPTIONAL for v1.0)
    - **Status:** Not downloaded
@@ -457,7 +463,7 @@ make stats  # Show pipeline statistics
 
 ### Documentation Needed
 
-- ⬜ `docs/TESTING.md` - Testing procedures and guidelines
+- ✅ `docs/TESTING.md` - Testing procedures and guidelines (COMPLETE)
 - ⬜ `docs/DEPLOYMENT.md` - Production deployment guide
 - ⬜ `docs/PERFORMANCE.md` - Performance tuning guide
 - ⬜ `docs/API.md` - Internal API documentation
