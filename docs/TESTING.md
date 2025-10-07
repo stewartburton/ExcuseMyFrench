@@ -926,58 +926,364 @@ ls -l data/images/generated/
 - ✅ Image quality is good (no artifacts)
 - ✅ Consistent character appearance across multiple generations
 
+### DreamBooth Test Scenarios
+
+#### Scenario 1: Fresh Training from Scratch
+
+**Objective:** Test complete training pipeline with no existing checkpoints.
+
+**Setup:**
+```bash
+# Clean up any existing training artifacts
+rm -rf models/dreambooth_butcher/
+rm -rf training/butcher/class_images/
+
+# Ensure training data exists
+ls training/butcher/images/*.jpg | wc -l
+# Should show 23 images
+```
+
+**Execution:**
+```bash
+# Start training from scratch
+python scripts/train_dreambooth.py --config training/config/butcher_config.yaml
+
+# Monitor progress
+nvidia-smi -l 1  # Watch GPU utilization
+```
+
+**Expected Results:**
+- Class images generated (200 images, ~10-15 minutes)
+- Training starts at step 0/800
+- Checkpoints saved every 100 steps
+- GPU utilization: 90-100%
+- GPU memory: 8-10GB used
+- Training speed: ~7-8 seconds/step on RTX 4070
+- Validation images generated at steps 100, 200, 300, 400, 500, 600, 700, 800
+- Total time: ~90-110 minutes
+
+**Success Criteria:**
+- ✅ All 800 steps complete successfully
+- ✅ 8 checkpoints saved (100, 200, 300, 400, 500, 600, 700, final)
+- ✅ Validation images show progressive improvement
+- ✅ Final model quality is good (character recognizable)
+- ✅ No CUDA errors throughout training
+
+#### Scenario 2: Resume from Interruption
+
+**Objective:** Test checkpoint/resume functionality with mid-training interruption.
+
+**Setup:**
+```bash
+# Start fresh training
+python scripts/train_dreambooth.py --config training/config/butcher_config.yaml
+
+# Wait for step ~350 (after checkpoint-300 is saved)
+# Interrupt with Ctrl+C
+```
+
+**Execution:**
+```bash
+# Resume from latest checkpoint
+python scripts/train_dreambooth.py --config training/config/butcher_config.yaml --resume
+```
+
+**Expected Results:**
+- Script detects checkpoint-300 as latest
+- Resumes from step 300/800 (not 0/800)
+- Progress bar starts at 37.5% (300/800)
+- Loss continues from previous value (~0.08-0.10)
+- Training completes remaining 500 steps
+- Total time: ~50-60 minutes for completion
+
+**Success Criteria:**
+- ✅ Correct checkpoint detected (checkpoint-300)
+- ✅ All model/optimizer states restored
+- ✅ No re-generation of class images
+- ✅ Training completes successfully
+- ✅ Final model quality identical to uninterrupted training
+
+#### Scenario 3: Multiple Interruptions
+
+**Objective:** Test robustness with multiple resume cycles.
+
+**Execution:**
+```bash
+# Cycle 1: Train 0→100
+python scripts/train_dreambooth.py --config training/config/butcher_config.yaml
+# Interrupt after step 100
+
+# Cycle 2: Resume 100→200
+python scripts/train_dreambooth.py --config training/config/butcher_config.yaml --resume
+# Interrupt after step 200
+
+# Cycle 3: Resume 200→400
+python scripts/train_dreambooth.py --config training/config/butcher_config.yaml --resume
+# Interrupt after step 400
+
+# Cycle 4: Resume 400→800 (complete)
+python scripts/train_dreambooth.py --config training/config/butcher_config.yaml --resume
+```
+
+**Expected Results:**
+- Each resume cycle loads correct checkpoint
+- Loss curve remains smooth (no spikes or discontinuities)
+- Learning rate schedule preserved across resumes
+- Final model quality unaffected by interruptions
+
+**Success Criteria:**
+- ✅ 4 resume cycles complete successfully
+- ✅ Each resume picks up from correct step
+- ✅ Loss values remain consistent across resumes
+- ✅ Final model quality identical to uninterrupted training
+- ✅ No memory leaks after multiple cycles
+
+#### Scenario 4: Training with Different Configurations
+
+**Objective:** Test training with varied hyperparameters.
+
+**Test Cases:**
+
+**4a. Lower Resolution (Faster Training)**
+```bash
+# Edit config: resolution: 512 (instead of 768)
+python scripts/train_dreambooth.py --config training/config/butcher_512.yaml
+
+# Expected: ~5-6 seconds/step, ~70-80 minutes total
+```
+
+**4b. Higher Learning Rate (Faster Convergence)**
+```bash
+# Edit config: learning_rate: 1e-5 (instead of 5e-6)
+python scripts/train_dreambooth.py --config training/config/butcher_high_lr.yaml
+
+# Expected: Faster loss decrease, potential for instability
+```
+
+**4c. More Training Steps (Better Quality)**
+```bash
+# Edit config: max_train_steps: 1200 (instead of 800)
+python scripts/train_dreambooth.py --config training/config/butcher_extended.yaml
+
+# Expected: ~130-150 minutes, improved model quality
+```
+
+**Success Criteria:**
+- ✅ All configuration variations complete successfully
+- ✅ Training time matches expectations
+- ✅ Model quality trade-offs are reasonable
+- ✅ No configuration causes crashes or errors
+
+#### Scenario 5: Validation Image Quality Check
+
+**Objective:** Verify validation images show progressive training improvement.
+
+**Execution:**
+```bash
+# After training completes, review validation images
+ls -R models/dreambooth_butcher/validation-*/
+
+# Check images at each checkpoint
+# validation-100/ - Early training, rough features
+# validation-300/ - Mid training, character emerging
+# validation-500/ - Late training, character well-formed
+# validation-800/ - Final, high quality
+```
+
+**Manual Review Checklist:**
+- ✅ Images at step 100 show basic shape/color
+- ✅ Images at step 300 show recognizable character features
+- ✅ Images at step 500 show clear character with good details
+- ✅ Images at step 800 show high-quality, consistent character
+- ✅ Progression shows steady improvement (not random)
+- ✅ No validation images show artifacts or corruption
+
+### DreamBooth Performance Benchmarks
+
+#### Expected Training Times
+
+**Full Training (800 steps):**
+
+| GPU Model | VRAM | Seconds/Step | Total Time | Notes |
+|-----------|------|--------------|------------|-------|
+| RTX 4090 | 24GB | 3-4s | 40-55 min | Can use batch_size=2 |
+| RTX 4080 | 16GB | 5-6s | 65-80 min | Can use batch_size=2 |
+| RTX 4070 Ti | 12GB | 7-8s | 90-110 min | batch_size=1 recommended |
+| RTX 4070 | 12GB | 7-8s | 90-110 min | batch_size=1 recommended |
+| RTX 3090 | 24GB | 6-7s | 80-95 min | Can use batch_size=2 |
+| RTX 3080 | 10GB | 9-10s | 120-135 min | batch_size=1 only |
+| RTX 3060 | 12GB | 12-15s | 160-200 min | batch_size=1, slower memory |
+
+*Benchmarks for resolution=512, batch_size=1, gradient_accumulation_steps=1*
+
+**Checkpoint Operations:**
+
+| Operation | Time | Notes |
+|-----------|------|-------|
+| Checkpoint save | 15-30s | Every 100 steps |
+| Checkpoint load | 10-20s | On resume |
+| Validation generation | 2-3 min | 4 images per checkpoint |
+| Class image generation | 10-15 min | One-time, 200 images |
+
+**Memory Usage:**
+
+| Component | VRAM Used | Notes |
+|-----------|-----------|-------|
+| Base model loading | 3-4GB | Stable Diffusion 2.1 |
+| Training batch | 4-5GB | During forward/backward pass |
+| Optimizer states | 1-2GB | Adam optimizer |
+| **Total Training** | **8-10GB** | Peak during training |
+| **Validation** | **5-6GB** | Lower than training |
+
+#### GPU Utilization Targets
+
+**During Training:**
+- GPU Utilization: 90-100% (optimal)
+- GPU Memory: 8-10GB / 12GB (80-85% usage)
+- GPU Temperature: 70-80°C (safe operating range)
+- Power Usage: 180-200W (near TDP on RTX 4070)
+
+**Warning Signs:**
+- GPU Utilization < 70% → Possible CPU bottleneck
+- GPU Memory > 11GB → Risk of OOM error
+- GPU Temperature > 85°C → Check cooling
+- Training speed varying widely → Check for background processes
+
 ### DreamBooth Troubleshooting
 
 #### "CUDA out of memory"
 
+**Symptoms:**
+```
+RuntimeError: CUDA out of memory. Tried to allocate 1.2 GiB (GPU 0; 12.00 GiB total capacity)
+```
+
 **Solution:**
 ```bash
-# Reduce batch size in config
+# Option 1: Reduce resolution (most effective)
 # Edit training/config/butcher_config.yaml:
-train_batch_size: 1  # Already minimum
-gradient_accumulation_steps: 2  # Increase this instead
-
-# Or use smaller resolution
 resolution: 512  # Instead of 768
+# Memory savings: ~3-4GB
+# Time savings: ~30-40%
+
+# Option 2: Enable gradient checkpointing (already enabled)
+# This is already in the config, but verify:
+gradient_checkpointing: true
+
+# Option 3: Increase gradient accumulation (slower but works)
+gradient_accumulation_steps: 2  # Effective batch size = 2
+# Memory savings: ~2GB
+# Time cost: ~20% slower
+
+# Option 4: Use mixed precision (already enabled)
+mixed_precision: "fp16"  # Already default
+
+# Option 5: Close other GPU applications
+nvidia-smi
+# Kill any other processes using GPU
 ```
 
 #### "Connection timeout" downloading models
 
+**Symptoms:**
+```
+requests.exceptions.ReadTimeout: HTTPSConnectionPool(host='huggingface.co')
+```
+
 **Solution:**
 ```bash
-# Pre-download base model
+# Option 1: Pre-download base model
 huggingface-cli login
-huggingface-cli download stabilityai/stable-diffusion-2-1
+huggingface-cli download stabilityai/stable-diffusion-2-1-base
 
-# Then run training
-python scripts/train_dreambooth.py --config training/config/butcher_config.yaml
+# Option 2: Increase timeout (edit script)
+# Or download manually from:
+# https://huggingface.co/stabilityai/stable-diffusion-2-1-base
+
+# Option 3: Use cached model if available
+# Check HuggingFace cache:
+ls -lh ~/.cache/huggingface/hub/
+# If model exists, training will use it automatically
 ```
 
 #### Loss not decreasing
 
+**Symptoms:**
+- Loss remains high (>0.2) after 200 steps
+- Loss oscillates wildly
+- Validation images show no improvement
+
 **Solution:**
 ```bash
-# Check learning rate (may be too high/low)
+# Check 1: Learning rate
 # Edit config:
 learning_rate: 5e-6  # Standard value
 learning_rate: 2e-6  # Try lower if loss unstable
+learning_rate: 1e-5  # Try higher if loss too flat
 
-# Check training data quality
-# - Ensure 15-25 high-quality images
-# - Verify images are diverse (angles, expressions)
-# - Check images are properly cropped/centered
+# Check 2: Training data quality
+ls training/butcher/images/ | wc -l
+# Need 15-25 high-quality images
+# - Diverse angles and expressions
+# - Properly cropped and centered
+# - Good lighting and focus
+# - Similar to desired output style
+
+# Check 3: Prior preservation
+# Verify class images generated:
+ls training/butcher/class_images/ | wc -l
+# Should show 200 images
+
+# Check 4: Monitor training closely
+# Add logging to track loss per step
+# Loss should decrease from ~0.15 to ~0.05-0.08
 ```
 
 #### Validation fails with dtype error
 
+**Symptoms:**
+```
+RuntimeError: expected scalar type Float but found Half
+```
+
 **Solution:**
 ```bash
-# This is fixed in the latest code
+# This is fixed in the latest code (as of commit f1ba5e0)
 # If still occurring, update the script:
 git pull origin main
 
-# Ensure text_encoder and vae are passed to pipeline
+# Ensure text_encoder and vae are passed to pipeline with correct dtype
 # See scripts/train_dreambooth.py:690-694
+
+# Verify fix is present:
+grep "text_encoder.to(weight_dtype)" scripts/train_dreambooth.py
+# Should find the line converting text_encoder to correct dtype
+```
+
+#### Training hangs or freezes
+
+**Symptoms:**
+- Progress bar stops updating
+- GPU utilization drops to 0%
+- No error message
+
+**Solution:**
+```bash
+# Check 1: System resources
+nvidia-smi  # Check GPU status
+htop  # Check CPU/RAM usage
+
+# Check 2: Disk space
+df -h  # Need 50GB+ free for checkpoints
+
+# Check 3: Kill and restart
+# Ctrl+C to interrupt
+# Resume from last checkpoint:
+python scripts/train_dreambooth.py --config training/config/butcher_config.yaml --resume
+
+# Check 4: Check for deadlock in data loading
+# Reduce num_dataloader_workers in config:
+num_dataloader_workers: 0  # Use main thread only
 ```
 
 ---
