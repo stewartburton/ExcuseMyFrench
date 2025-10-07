@@ -458,7 +458,7 @@ class DreamBoothTrainer:
 
         return optimizer
 
-    def train(self):
+    def train(self, resume_from_checkpoint=None):
         """Run training loop."""
         logger.info("Starting training")
 
@@ -502,6 +502,15 @@ class DreamBoothTrainer:
         # Move VAE to device
         self.vae.to(self.accelerator.device)
 
+        # Load checkpoint if resuming
+        starting_step = 0
+        if resume_from_checkpoint:
+            logger.info(f"Loading checkpoint from {resume_from_checkpoint}")
+            self.accelerator.load_state(resume_from_checkpoint)
+            starting_step = int(Path(resume_from_checkpoint).name.split("-")[1])
+            self.global_step = starting_step
+            logger.info(f"Resuming from step {starting_step}")
+
         # Calculate number of epochs
         num_update_steps_per_epoch = math.ceil(len(train_dataloader) / self.config.gradient_accumulation_steps)
         num_train_epochs = math.ceil(self.config.max_train_steps / num_update_steps_per_epoch)
@@ -512,10 +521,14 @@ class DreamBoothTrainer:
         logger.info(f"  Batch size per device = {self.config.train_batch_size}")
         logger.info(f"  Gradient accumulation steps = {self.config.gradient_accumulation_steps}")
         logger.info(f"  Total optimization steps = {self.config.max_train_steps}")
+        if resume_from_checkpoint:
+            logger.info(f"  Starting from step = {starting_step}")
 
         # Training loop
         progress_bar = tqdm(
-            range(self.config.max_train_steps),
+            range(starting_step, self.config.max_train_steps),
+            initial=starting_step,
+            total=self.config.max_train_steps,
             disable=not self.accelerator.is_local_main_process,
             desc="Training",
         )
@@ -672,11 +685,13 @@ class DreamBoothTrainer:
         """Run validation with sample prompts."""
         logger.info("Running validation...")
 
-        # Create pipeline
+        # Create pipeline - always include text_encoder even if not training it
+        # Also include VAE to ensure dtype consistency
         pipeline = StableDiffusionPipeline.from_pretrained(
             self.config.base_model,
             unet=self.accelerator.unwrap_model(self.unet),
-            text_encoder=self.accelerator.unwrap_model(self.text_encoder) if self.config.train_text_encoder else None,
+            text_encoder=self.accelerator.unwrap_model(self.text_encoder),
+            vae=self.vae,
             revision=self.config.revision,
             torch_dtype=torch.float16 if self.accelerator.mixed_precision == "fp16" else torch.float32,
         )
@@ -774,6 +789,12 @@ Examples:
         help="Disable prior preservation"
     )
 
+    parser.add_argument(
+        "--resume",
+        action="store_true",
+        help="Resume training from the latest checkpoint"
+    )
+
     args = parser.parse_args()
 
     # Load or create config
@@ -804,7 +825,21 @@ Examples:
 
     # Create trainer and run
     trainer = DreamBoothTrainer(config)
-    trainer.train()
+
+    # Find latest checkpoint if resume is requested
+    resume_from_checkpoint = None
+    if args.resume:
+        checkpoint_dirs = sorted(
+            [d for d in Path(config.output_dir).glob("checkpoint-*") if d.is_dir()],
+            key=lambda x: int(x.name.split("-")[1])
+        )
+        if checkpoint_dirs:
+            resume_from_checkpoint = str(checkpoint_dirs[-1])
+            logger.info(f"Resuming from checkpoint: {resume_from_checkpoint}")
+        else:
+            logger.warning("No checkpoints found, starting from scratch")
+
+    trainer.train(resume_from_checkpoint=resume_from_checkpoint)
 
 
 if __name__ == "__main__":
