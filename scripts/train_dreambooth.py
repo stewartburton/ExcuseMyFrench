@@ -376,11 +376,14 @@ class DreamBoothTrainer:
         token = os.getenv("HF_TOKEN")
 
         # Load pipeline for generation
+        dtype = torch.float16 if self.accelerator.mixed_precision == "fp16" else torch.float32
         pipeline = StableDiffusionPipeline.from_pretrained(
             self.config.base_model,
             revision=self.config.revision,
-            torch_dtype=torch.float16 if self.accelerator.mixed_precision == "fp16" else torch.float32,
+            torch_dtype=dtype,
             token=token,
+            safety_checker=None,
+            requires_safety_checker=False,
         )
         pipeline.set_progress_bar_config(disable=True)
         pipeline.to(self.accelerator.device)

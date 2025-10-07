@@ -6,7 +6,7 @@
 # Model Settings
 # --------------
 # Base model to fine-tune from Hugging Face
-base_model: "runwayml/stable-diffusion-v1-5"
+base_model: "stabilityai/stable-diffusion-2-1"
 revision: null  # Use 'fp16' for half precision base model if available
 
 # Training Data Paths
