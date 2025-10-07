@@ -19,6 +19,7 @@ help:
 	@echo ""
 	@echo "Testing & Quality:"
 	@echo "  make test             - Run all tests"
+	@echo "  make demo             - Run environment validation (no API keys needed)"
 	@echo "  make test-comfyui     - Test ComfyUI integration"
 	@echo "  make test-instagram   - Test Instagram posting (dry-run)"
 	@echo "  make lint             - Run code linters"
@@ -96,6 +97,10 @@ assemble-video:
 test:
 	@echo "Running tests..."
 	@python -m pytest tests/ -v || echo "Note: Install pytest to run tests (pip install pytest)"
+
+demo:
+	@echo "Running environment validation..."
+	python scripts/demo.py
 
 test-comfyui:
 	@echo "Testing ComfyUI integration..."
