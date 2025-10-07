@@ -192,18 +192,19 @@ This document tracks all remaining tasks to complete the ExcuseMyFrench project.
   - **Note:** Downloaded SD (Stable Diffusion enhanced) versions, not older `wav2lip*.pth` versions
   - **Full Instructions:** `docs/MODEL_DOWNLOADS.md`
 
-- [ ] **Download SadTalker Checkpoints**
+- [X] **Download SadTalker Checkpoints** ✅
   - **Priority:** MEDIUM
   - **Estimated Time:** 15 minutes
-  - **Size:** ~2GB
-  - **Action:** See detailed guide in `docs/MODEL_DOWNLOADS.md` - SadTalker section
-  - **Quick Start:**
-    1. Visit https://huggingface.co/vinthony/SadTalker/tree/main/checkpoints
-    2. Download 4 checkpoint files via web interface
-    3. Visit GitHub releases for GFPGAN weights (3 files)
-    4. Save to `models/sadtalker/checkpoints/` and `models/sadtalker/gfpgan/weights/`
-  - **Verify:** 4 files in checkpoints/, 3 files in gfpgan/weights/
-  - **Note:** Better quality than Wav2Lip, but slower
+  - **Size:** ~1.4GB
+  - **Status:** COMPLETED
+  - **Files Downloaded:**
+    - ✅ SadTalker_V0.0.2_256.safetensors (692MB)
+    - ✅ SadTalker_V0.0.2_512.safetensors (692MB)
+    - ✅ alignment_WFLW_4HG.pth (185MB)
+    - ✅ GFPGANv1.4.pth (333MB)
+    - ✅ headpose_hopenet.pth (92MB)
+  - **Location:** `models/sadtalker/checkpoints/` and `models/sadtalker/gfpgan/weights/`
+  - **Note:** Using V0.0.2 models (newer, recommended version)
   - **Full Instructions:** `docs/MODEL_DOWNLOADS.md`
 
 - [ ] **Test Animation Pipeline**
@@ -309,18 +310,20 @@ This document tracks all remaining tasks to complete the ExcuseMyFrench project.
 
 ### Video Generation (Optional)
 
-- [ ] **Download Wan 2.2 Models**
+- [X] **Download Wan 2.2 Models** ✅
   - **Priority:** LOW (optional for v1.0)
-  - **Estimated Time:** 1-3 hours depending on model size and connection
-  - **Size:**
-    - 5B model: ~10GB (Recommended for RTX 4070 with 12GB VRAM)
-    - 14B model: ~28GB (Requires 24GB+ VRAM like RTX 4090)
-  - **Action:** See detailed guide in `docs/MODEL_DOWNLOADS.md` - Wan 2.2 section
-  - **Important Notes:**
-    - As of October 2025, Wan 2.2 may still be in development
-    - Check official sources (HuggingFace, GitHub, arXiv) for availability
-    - NOT required for v1.0 - use Stable Diffusion + Wav2Lip/SadTalker instead
-  - **Alternative:** Start with static images + animation (recommended)
+  - **Estimated Time:** 1-3 hours
+  - **Size:** ~32GB (TI2V-5B model)
+  - **Status:** COMPLETED
+  - **Files Downloaded:**
+    - ✅ Wan2.2_VAE.pth (2.7GB)
+    - ✅ diffusion_pytorch_model-00001-of-00003.safetensors (9.2GB)
+    - ✅ diffusion_pytorch_model-00002-of-00003.safetensors (9.4GB)
+    - ✅ diffusion_pytorch_model-00003-of-00003.safetensors (171MB)
+    - ✅ models_t5_umt5-xxl-enc-bf16.pth (11GB) - T5 text encoder
+    - ✅ Config files, index files, examples
+  - **Location:** `models/wan2.2/TI2V-5B/`
+  - **Capabilities:** 720P@24fps text-to-video and image-to-video generation
   - **Full Instructions:** `docs/MODEL_DOWNLOADS.md`
 
 ---

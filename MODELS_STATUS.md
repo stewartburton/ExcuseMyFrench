@@ -1,6 +1,6 @@
 # Models Download Status
 
-**Last Updated:** October 7, 2025, 11:07 PM
+**Last Updated:** October 7, 2025, 11:30 PM
 **DreamBooth Training:** In progress (check with `nvidia-smi`)
 
 ---
@@ -8,11 +8,11 @@
 ## ✅ Successfully Downloaded Models
 
 ### 1. DreamBooth Butcher Model (Training in Progress)
-- **Status:** 62.5% complete (500/800 steps)
+- **Status:** 75% complete (600/800 steps)
 - **Location:** `models/dreambooth_butcher/`
-- **Latest Checkpoint:** `checkpoint-500/` (3.3GB model + 6.5GB optimizer)
-- **Validation Images:** Generated at steps 300, 400, 500
-- **Next:** Continue training to step 800
+- **Latest Checkpoint:** `checkpoint-600/` (3.3GB model + 6.5GB optimizer)
+- **Validation Images:** Generated at steps 300, 400, 500, 600
+- **Next:** Continue training to step 800 (~20-30 minutes remaining)
 
 ### 2. Wav2Lip Models ✅
 - **Location:** `models/wav2lip/`

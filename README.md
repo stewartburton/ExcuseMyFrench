@@ -60,7 +60,7 @@ make run-pipeline
 - Wan 2.2 models (for video generation)
 - ComfyUI (for advanced image generation)
 - Instagram API access (for automated posting)
-- Animation models (SadTalker or Wav2Lip)
+- Animation models (SadTalker or Wav2Lip) - [Download Guide](MODELS_QUICKSTART.md)
 
 ### Installation
 
@@ -79,11 +79,22 @@ pip install torch torchvision torchaudio --index-url https://download.pytorch.or
 # Install other dependencies
 pip install -r requirements.txt
 
+# Install FFmpeg (required for video processing)
+# Windows (requires admin PowerShell):
+choco install ffmpeg -y
+# Linux (Ubuntu/Debian):
+# sudo apt install ffmpeg
+# macOS:
+# brew install ffmpeg
+
 # Initialize databases
 python scripts/init_databases.py
 
 # Verify GPU is available
 python -c "import torch; print('CUDA available:', torch.cuda.is_available())"
+
+# Verify FFmpeg is installed
+ffmpeg -version
 ```
 
 ### Configuration
